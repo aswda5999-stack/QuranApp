@@ -1,6 +1,14 @@
 package com.quran.app
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.graphics.Typeface
+import android.os.Build
+import androidx.compose.ui.text.font.FontFamily
+import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -21,7 +29,8 @@ data class AyahItem(
     val numberInSurah: Int,
     val text: String,
     val tafsir: String,
-    val audioUrl: String
+    val juz: Int,
+    val page: Int
 )
 
 data class BookmarkItem(
@@ -37,70 +46,90 @@ data class GuideItem(
     val count: Int = 1
 )
 
+data class ReciterInfo(
+    val id: String,
+    val name: String,
+    val serverUrl: String
+)
+
 data class AppSettings(
-    val fontSize: Float = 24f,
+    val fontSize: Float = 26f,
+    val useUthmanicFont: Boolean = true,
     val isBoldFont: Boolean = false,
-    val lineSpacing: Float = 1.6f,
+    val lineSpacing: Float = 1.75f,
     val isMushafMode: Boolean = false,
+    val showAyahMarkers: Boolean = true,
     val isDarkMode: Boolean = false,
-    val themeIndex: Int = 0, // 0: Emerald, 1: Royal Blue, 2: Warm Gold, 3: Classic Paper
-    val defaultReciter: String = "ar.alafasy",
-    val autoPlayNext: Boolean = true,
+    val themeIndex: Int = 0, // 0..5
+    val cardCornerRadius: Float = 20f,
+    val defaultReciterId: String = "afs",
     val keepScreenOn: Boolean = true,
     val showNavLabels: Boolean = true,
     val isGridView: Boolean = false,
     val vibrateOnTasbih: Boolean = true,
+    val notificationsEnabled: Boolean = true,
     val lastSurahNumber: Int = 1,
     val lastSurahName: String = "سُورَةُ ٱلْفَاتِحَةِ",
-    val tasbihCount: Int = 0
+    val tasbihCount: Int = 0,
+    val totalReadAyahs: Int = 0
 )
 
 class SettingsManager(context: Context) {
-    private val prefs = context.getSharedPreferences("quran_pro_prefs", Context.MODE_PRIVATE)
+    private val prefs = context.getSharedPreferences("quran_v2_prefs", Context.MODE_PRIVATE)
 
     fun loadSettings(): AppSettings = AppSettings(
-        fontSize = prefs.getFloat("fontSize", 24f),
+        fontSize = prefs.getFloat("fontSize", 26f),
+        useUthmanicFont = prefs.getBoolean("useUthmanicFont", true),
         isBoldFont = prefs.getBoolean("isBoldFont", false),
-        lineSpacing = prefs.getFloat("lineSpacing", 1.6f),
+        lineSpacing = prefs.getFloat("lineSpacing", 1.75f),
         isMushafMode = prefs.getBoolean("isMushafMode", false),
+        showAyahMarkers = prefs.getBoolean("showAyahMarkers", true),
         isDarkMode = prefs.getBoolean("isDarkMode", false),
         themeIndex = prefs.getInt("themeIndex", 0),
-        defaultReciter = prefs.getString("defaultReciter", "ar.alafasy") ?: "ar.alafasy",
-        autoPlayNext = prefs.getBoolean("autoPlayNext", true),
+        cardCornerRadius = prefs.getFloat("cardCornerRadius", 20f),
+        defaultReciterId = prefs.getString("defaultReciterId", "afs") ?: "afs",
         keepScreenOn = prefs.getBoolean("keepScreenOn", true),
         showNavLabels = prefs.getBoolean("showNavLabels", true),
         isGridView = prefs.getBoolean("isGridView", false),
         vibrateOnTasbih = prefs.getBoolean("vibrateOnTasbih", true),
+        notificationsEnabled = prefs.getBoolean("notificationsEnabled", true),
         lastSurahNumber = prefs.getInt("lastSurahNumber", 1),
         lastSurahName = prefs.getString("lastSurahName", "سُورَةُ ٱلْفَاتِحَةِ") ?: "سُورَةُ ٱلْفَاتِحَةِ",
-        tasbihCount = prefs.getInt("tasbihCount", 0)
+        tasbihCount = prefs.getInt("tasbihCount", 0),
+        totalReadAyahs = prefs.getInt("totalReadAyahs", 0)
     )
 
     fun saveSettings(s: AppSettings) {
         prefs.edit().apply {
             putFloat("fontSize", s.fontSize)
+            putBoolean("useUthmanicFont", s.useUthmanicFont)
             putBoolean("isBoldFont", s.isBoldFont)
             putFloat("lineSpacing", s.lineSpacing)
             putBoolean("isMushafMode", s.isMushafMode)
+            putBoolean("showAyahMarkers", s.showAyahMarkers)
             putBoolean("isDarkMode", s.isDarkMode)
             putInt("themeIndex", s.themeIndex)
-            putString("defaultReciter", s.defaultReciter)
-            putBoolean("autoPlayNext", s.autoPlayNext)
+            putFloat("cardCornerRadius", s.cardCornerRadius)
+            putString("defaultReciterId", s.defaultReciterId)
             putBoolean("keepScreenOn", s.keepScreenOn)
             putBoolean("showNavLabels", s.showNavLabels)
             putBoolean("isGridView", s.isGridView)
             putBoolean("vibrateOnTasbih", s.vibrateOnTasbih)
+            putBoolean("notificationsEnabled", s.notificationsEnabled)
             putInt("lastSurahNumber", s.lastSurahNumber)
             putString("lastSurahName", s.lastSurahName)
             putInt("tasbihCount", s.tasbihCount)
+            putInt("totalReadAyahs", s.totalReadAyahs)
             apply()
         }
     }
 
-    fun saveLastRead(surahNumber: Int, surahName: String) {
+    fun saveLastRead(surahNumber: Int, surahName: String, ayahsCount: Int = 0) {
+        val prevTotal = prefs.getInt("totalReadAyahs", 0)
         prefs.edit()
             .putInt("lastSurahNumber", surahNumber)
             .putString("lastSurahName", surahName)
+            .putInt("totalReadAyahs", prevTotal + ayahsCount)
             .apply()
     }
 
@@ -161,19 +190,96 @@ class SettingsManager(context: Context) {
     }
 }
 
+object QuranNotificationHelper {
+    private const val CHANNEL_ID = "quran_daily_reminders"
+
+    fun showReminderNotification(context: Context, title: String, message: String) {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "تذكيرات القرآن والأذكار",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "إشعارات يومية للأذكار وورد القرآن الكريم"
+            }
+            manager.createNotificationChannel(channel)
+        }
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_quran)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        manager.notify(1001, notification)
+    }
+}
+
 object QuranRepository {
-    val reciters = listOf(
-        "ar.alafasy" to "مشاري راشد العفاسي",
-        "ar.abdurrahmaansudais" to "عبدالرحمن السديس",
-        "ar.husary" to "محمود خليل الحصري",
-        "ar.minshawi" to "محمد صديق المنشاوي",
-        "ar.mahermuaiqly" to "ماهر المعيقلي",
-        "ar.shaatree" to "أبو بكر الشاطري"
+    // قراء بتلاوات كاملة متصلة للسورة بدون تقطيع
+    val fullSurahReciters = listOf(
+        ReciterInfo("afs", "مشاري راشد العفاسي", "https://server8.mp3quran.net/afs/"),
+        ReciterInfo("sds", "عبدالرحمن السديس", "https://server11.mp3quran.net/sds/"),
+        ReciterInfo("shur", "سعود الشريم", "https://server7.mp3quran.net/shur/"),
+        ReciterInfo("maher", "ماهر المعيقلي", "https://server12.mp3quran.net/maher/"),
+        ReciterInfo("husr", "محمود خليل الحصري", "https://server13.mp3quran.net/husr/"),
+        ReciterInfo("minsh", "محمد صديق المنشاوي", "https://server10.mp3quran.net/minsh/"),
+        ReciterInfo("yasser", "ياسر الدوسري", "https://server11.mp3quran.net/yasser/"),
+        ReciterInfo("ajm", "أحمد بن علي العجمي", "https://server10.mp3quran.net/ajm/")
     )
+
+    fun buildFullSurahAudioUrl(reciterId: String, surahNumber: Int): String {
+        val reciter = fullSurahReciters.find { it.id == reciterId } ?: fullSurahReciters.first()
+        val padded = surahNumber.toString().padStart(3, '0')
+        return "${reciter.serverUrl}$padded.mp3"
+    }
+
+    // تحميل وتوفير الخط العثماني الأصلي لمجمع الملك فهد (Hafs Uthmanic)
+    suspend fun getUthmanicFontFamily(context: Context): FontFamily = withContext(Dispatchers.IO) {
+        val fontFile = File(context.filesDir, "UthmanicHafs.ttf")
+        try {
+            if (!fontFile.exists() || fontFile.length() < 10000) {
+                val urls = listOf(
+                    "https://raw.githubusercontent.com/thetruetruth/quran-data-kfgqpc/main/hafs/font/hafs.18.ttf",
+                    "https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/fonts/uthmanic_hafs_v20.ttf"
+                )
+                for (u in urls) {
+                    try {
+                        val bytes = URL(u).readBytes()
+                        if (bytes.size > 10000) {
+                            fontFile.writeBytes(bytes)
+                            break
+                        }
+                    } catch (_: Exception) { }
+                }
+            }
+            if (fontFile.exists() && fontFile.length() > 10000) {
+                val tf = Typeface.createFromFile(fontFile)
+                FontFamily(tf)
+            } else {
+                FontFamily.Serif
+            }
+        } catch (_: Exception) {
+            FontFamily.Serif
+        }
+    }
 
     val adhkarCategories = mapOf(
         "أذكار الصباح والمساء" to listOf(
-            GuideItem("سيد الاستغفار", "اللهم أنت ربي لا إله إلا أنت، خلقتني وأنا عبدك، وأنا على عهدك ووعدك ما استطعت...", 1),
+            GuideItem("سيد الاستغفار", "اللهم أنت ربي لا إله إلا أنت، خلقتني وأنا عبدك، وأنا على عهدك ووعدك ما استطعت، أعوذ بك من شر ما صنعت، أبوء لك بنعمتك علي، وأبوء بذنبي فاغفر لي فإنه لا يغفر الذنوب إلا أنت.", 1),
             GuideItem("آية الكرسي", "قراءة آية الكرسي مرة واحدة صباحاً ومساءً للحفظ من كل سوء.", 1),
             GuideItem("المعوذات الثلاث", "قراءة سورة الإخلاص والفلق والناس ثلاث مرات صباحاً ومساءً.", 3),
             GuideItem("التسبيح والتهليل", "سبحان الله وبحمده: مائة مرة، ولا إله إلا الله وحده لا شريك له: مائة مرة.", 100),
@@ -182,11 +288,11 @@ object QuranRepository {
         ),
         "أذكار بعد الصلاة" to listOf(
             GuideItem("الاستغفار بعد السلام", "أستغفر الله (ثلاثاً)، اللهم أنت السلام ومنك السلام تباركت يا ذا الجلال والإكرام.", 1),
-            GuideItem("التسبيح عقب الصلاة", "سبحان الله (33)، والحمد لله (33)، والله أكبر (33)، وتمام المائة لا إله إلا الله.", 33),
+            GuideItem("التسبيح عقب الصلاة", "سبحان الله (33)، والحمد لله (33)، والله أكبر (33)، وتمام المائة لا إله إلا الله وحده لا شريك له.", 33),
             GuideItem("دعاء الإعانة", "اللهم أعني على ذكرك وشكرك وحسن عبادتك.", 1)
         ),
         "أذكار النوم" to listOf(
-            GuideItem("باسمك اللهم", "باسمك ربي وضعت جنبي وبك أرفعه، فإن أمسكت نفسي فارحمها، وإن أرسلتها فاحفظها.", 1),
+            GuideItem("باسمك اللهم", "باسمك ربي وضعت جنبي وبك أرفعه، فإن أمسكت نفسي فارحمها، وإن أرسلتها فاحفظها بما تحفظ به عبادك الصالحين.", 1),
             GuideItem("تسبيح النوم", "سبحان الله (33)، والحمد لله (33)، والله أكبر (34) قبل المنام.", 33),
             GuideItem("النفث بالمعوذات", "جمع الكفين والنفث فيهما وقراءة الإخلاص والفلق والناس ومسح الجسد ثلاثاً.", 3)
         )
@@ -215,7 +321,7 @@ object QuranRepository {
     )
 
     suspend fun getSurahList(context: Context): List<SurahInfo> = withContext(Dispatchers.IO) {
-        val cacheFile = File(context.filesDir, "surahs_list.json")
+        val cacheFile = File(context.filesDir, "surahs_list_v2.json")
         val jsonStr = try {
             val fresh = URL("https://api.alquran.cloud/v1/surah").readText()
             cacheFile.writeText(fresh)
@@ -240,11 +346,11 @@ object QuranRepository {
         list
     }
 
-    suspend fun getSurahDetails(context: Context, surahNumber: Int, reciter: String): List<AyahItem> =
+    suspend fun getSurahDetails(context: Context, surahNumber: Int): List<AyahItem> =
         withContext(Dispatchers.IO) {
-            val cacheFile = File(context.filesDir, "surah_${surahNumber}_$reciter.json")
+            val cacheFile = File(context.filesDir, "surah_v2_$surahNumber.json")
             val jsonStr = try {
-                val url = "https://api.alquran.cloud/v1/surah/$surahNumber/editions/quran-uthmani,ar.muyassar,$reciter"
+                val url = "https://api.alquran.cloud/v1/surah/$surahNumber/editions/quran-uthmani,ar.muyassar"
                 val fresh = URL(url).readText()
                 cacheFile.writeText(fresh)
                 fresh
@@ -254,20 +360,19 @@ object QuranRepository {
             val editions = JSONObject(jsonStr).getJSONArray("data")
             val uthmaniAyahs = editions.getJSONObject(0).getJSONArray("ayahs")
             val tafsirAyahs = editions.getJSONObject(1).getJSONArray("ayahs")
-            val audioAyahs = editions.getJSONObject(2).getJSONArray("ayahs")
 
             val result = mutableListOf<AyahItem>()
             for (i in 0 until uthmaniAyahs.length()) {
                 val u = uthmaniAyahs.getJSONObject(i)
                 val t = tafsirAyahs.getJSONObject(i)
-                val a = audioAyahs.getJSONObject(i)
                 result.add(
                     AyahItem(
                         number = u.getInt("number"),
                         numberInSurah = u.getInt("numberInSurah"),
                         text = u.getString("text"),
                         tafsir = t.getString("text"),
-                        audioUrl = a.optString("audio", "")
+                        juz = u.optInt("juz", 1),
+                        page = u.optInt("page", 1)
                     )
                 )
             }
