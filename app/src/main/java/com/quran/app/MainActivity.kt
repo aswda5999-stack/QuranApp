@@ -1,11 +1,16 @@
 package com.quran.app
 
+import android.Manifest
 import android.app.Activity
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -20,26 +25,58 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.core.content.ContextCompat
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                QuranProApp()
+                QuranProAppV2()
             }
         }
     }
 }
 
 @Composable
-fun QuranProApp() {
+fun QuranProAppV2() {
     val context = LocalContext.current
     val settingsManager = remember { SettingsManager(context) }
     var settings by remember { mutableStateOf(settingsManager.loadSettings()) }
+    var uthmanicFont by remember { mutableStateOf<FontFamily>(FontFamily.Serif) }
 
-    // تفعيل أو إيقاف إبقاء الشاشة مضاءة ديناميكياً
+    // تحميل الخط العثماني الأصلي تلقائياً عند التشغيل
+    LaunchedEffect(Unit) {
+        uthmanicFont = QuranRepository.getUthmanicFontFamily(context)
+    }
+
+    // طلب إذن الإشعارات لأندرويد 13+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { }
+    )
+
+    fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (settings.notificationsEnabled) {
+            requestNotificationPermissionIfNeeded()
+        }
+    }
+
+    // إبقاء الشاشة مضاءة
     LaunchedEffect(settings.keepScreenOn) {
         val window = (context as? Activity)?.window
         if (settings.keepScreenOn) {
@@ -50,12 +87,11 @@ fun QuranProApp() {
     }
 
     val colorScheme = remember(settings.isDarkMode, settings.themeIndex) {
-        buildAppColorScheme(settings.isDarkMode, settings.themeIndex)
+        buildAppColorSchemeV2(settings.isDarkMode, settings.themeIndex)
     }
 
-    // حالة التنقل
-    var currentTab by remember { mutableIntStateOf(0) } // 0: الرئيسية، 1: الأذكار، 2: إشارة، 3: الإعدادات
-    var subScreen by remember { mutableStateOf("NONE") } // NONE, SURAH_LIST, SURAH_DETAIL, PRAYER
+    var currentTab by remember { mutableIntStateOf(0) }
+    var subScreen by remember { mutableStateOf("NONE") }
     var isAudioMode by remember { mutableStateOf(false) }
     var selectedSurahNum by remember { mutableIntStateOf(1) }
     var selectedSurahName by remember { mutableStateOf("سُورَةُ ٱلْفَاتِحَةِ") }
@@ -104,6 +140,7 @@ fun QuranProApp() {
                     "SURAH_LIST" -> SurahListScreen(
                         isAudioMode = isAudioMode,
                         settings = settings,
+                        uthmanicFont = uthmanicFont,
                         onBack = { subScreen = "NONE" },
                         onSelectSurah = { surah ->
                             selectedSurahNum = surah.number
@@ -117,18 +154,21 @@ fun QuranProApp() {
                         autoStartAudio = isAudioMode,
                         settings = settings,
                         settingsManager = settingsManager,
+                        uthmanicFont = uthmanicFont,
                         onBack = {
                             settings = settingsManager.loadSettings()
                             subScreen = "SURAH_LIST"
                         }
                     )
                     "PRAYER" -> PrayerGuideScreen(
+                        settings = settings,
                         onBack = { subScreen = "NONE" }
                     )
                     else -> {
                         when (currentTab) {
                             0 -> HomeScreen(
                                 settings = settings,
+                                uthmanicFont = uthmanicFont,
                                 onOpenQuran = {
                                     isAudioMode = false
                                     subScreen = "SURAH_LIST"
@@ -151,6 +191,8 @@ fun QuranProApp() {
                                 settingsManager = settingsManager
                             )
                             2 -> BookmarksScreen(
+                                settings = settings,
+                                uthmanicFont = uthmanicFont,
                                 settingsManager = settingsManager,
                                 onOpenSurah = { num, name ->
                                     isAudioMode = false
@@ -161,7 +203,9 @@ fun QuranProApp() {
                             )
                             3 -> SettingsScreen(
                                 settings = settings,
+                                uthmanicFont = uthmanicFont,
                                 settingsManager = settingsManager,
+                                onRequestNotificationPermission = { requestNotificationPermissionIfNeeded() },
                                 onUpdateSettings = { updated ->
                                     settings = updated
                                     settingsManager.saveSettings(updated)
@@ -175,37 +219,41 @@ fun QuranProApp() {
     }
 }
 
-private fun buildAppColorScheme(isDark: Boolean, themeIndex: Int): ColorScheme {
+private fun buildAppColorSchemeV2(isDark: Boolean, themeIndex: Int): ColorScheme {
     val primaryColor = when (themeIndex) {
-        1 -> Color(0xFF0D47A1) // الأزرق الملكي
-        2 -> Color(0xFF8D6E63) // الذهبي الدافئ
+        1 -> Color(0xFF0D47A1) // الكحلي الملكي
+        2 -> Color(0xFF8D6E63) // الذهبي الأندلسي
         3 -> Color(0xFF5D4037) // الورقي الكلاسيكي
-        else -> Color(0xFF1B5E20) // الأخضر الزمردي
+        4 -> Color(0xFF00695C) // الفيروزي
+        5 -> Color(0xFF4A148C) // الأرجواني الهادئ
+        else -> Color(0xFF1B5E20) // الأخضر الملكي
     }
     val secondaryColor = when (themeIndex) {
         1 -> Color(0xFF1976D2)
         2 -> Color(0xFFA1887F)
         3 -> Color(0xFF795548)
+        4 -> Color(0xFF00897B)
+        5 -> Color(0xFF7B1FA2)
         else -> Color(0xFF2E7D32)
     }
 
     return if (isDark) {
         darkColorScheme(
-            primary = primaryColor.copy(alpha = 0.85f),
+            primary = primaryColor.copy(alpha = 0.88f),
             secondary = secondaryColor,
-            background = Color(0xFF121212),
-            surface = Color(0xFF1E1E1E),
-            surfaceVariant = Color(0xFF2A2A2A)
+            background = Color(0xFF101211),
+            surface = Color(0xFF1A1D1B),
+            surfaceVariant = Color(0xFF252A27)
         )
     } else {
-        val bg = if (themeIndex == 3) Color(0xFFFDF6E3) else Color(0xFFF5F7F5)
+        val bg = if (themeIndex == 3) Color(0xFFFDF6E3) else Color(0xFFF4F7F5)
         val surf = if (themeIndex == 3) Color(0xFFFAF0D7) else Color.White
         lightColorScheme(
             primary = primaryColor,
             secondary = secondaryColor,
             background = bg,
             surface = surf,
-            surfaceVariant = Color(0xFFE8EFE8)
+            surfaceVariant = Color(0xFFE6EFE9)
         )
     }
 }
