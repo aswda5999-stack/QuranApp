@@ -36,15 +36,18 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 
 @Composable
 fun HomeScreen(
     settings: AppSettings,
+    uthmanicFont: FontFamily,
     onOpenQuran: () -> Unit,
     onOpenAudioQuran: () -> Unit,
     onOpenAdhkar: () -> Unit,
@@ -54,6 +57,8 @@ fun HomeScreen(
     val context = LocalContext.current
     val primary = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.secondary
+    val corner = settings.cardCornerRadius.dp
+    val quranFont = if (settings.useUthmanicFont) uthmanicFont else FontFamily.Default
 
     Column(
         modifier = Modifier
@@ -62,29 +67,35 @@ fun HomeScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // بطاقة الترحيب وآية اليوم
+        // بطاقة الإضاءة القرآنية بالخط العثماني
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            elevation = CardDefaults.cardElevation(4.dp)
+            shape = RoundedCornerShape(corner + 4.dp),
+            elevation = CardDefaults.cardElevation(6.dp)
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Brush.horizontalGradient(listOf(primary, secondary)))
-                    .padding(20.dp)
+                    .background(Brush.linearGradient(listOf(primary, secondary)))
+                    .padding(22.dp)
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "إضاءة قرآنية",
-                            color = Color.White.copy(alpha = 0.9f),
-                            style = MaterialTheme.typography.labelLarge
-                        )
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = Color.White.copy(alpha = 0.18f)
+                        ) {
+                            Text(
+                                text = "إضاءة قرآنية",
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                            )
+                        }
                         IconButton(
                             onClick = {
                                 val sendIntent = Intent(Intent.ACTION_SEND).apply {
@@ -101,12 +112,12 @@ fun HomeScreen(
                     Text(
                         text = "﴿ فَاذْكُرُونِي أَذْكُرْكُمْ وَاشْكُرُوا لِي وَلَا تَكْفُرُونِ ﴾",
                         color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        lineHeight = 32.sp
+                        fontFamily = quranFont,
+                        fontSize = 23.sp,
+                        lineHeight = 38.sp
                     )
                     Text(
-                        text = "سورة البقرة - آية 152",
+                        text = "سورة البقرة • الآية 152",
                         color = Color.White.copy(alpha = 0.85f),
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -114,12 +125,33 @@ fun HomeScreen(
             }
         }
 
+        // شريط الإحصائيات السريعة
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            StatMiniCard(
+                label = "الآيات المقروءة",
+                value = "${settings.totalReadAyahs}",
+                icon = Icons.Default.AutoStories,
+                corner = corner,
+                modifier = Modifier.weight(1f)
+            )
+            StatMiniCard(
+                label = "مجموع التسبيح",
+                value = "${settings.tasbihCount}",
+                icon = Icons.Default.Fingerprint,
+                corner = corner,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
         // بطاقة متابعة آخر قراءة
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onContinueReading(settings.lastSurahNumber, settings.lastSurahName) },
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(corner),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
         ) {
             Row(
@@ -132,9 +164,9 @@ fun HomeScreen(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Box(
                         modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(primary.copy(alpha = 0.15f)),
+                            .size(46.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(primary.copy(alpha = 0.16f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(Icons.Default.BookmarkAdded, contentDescription = null, tint = primary)
@@ -143,7 +175,8 @@ fun HomeScreen(
                         Text("متابعة آخر قراءة", style = MaterialTheme.typography.labelMedium, color = primary)
                         Text(
                             text = settings.lastSurahName,
-                            style = MaterialTheme.typography.titleMedium,
+                            fontFamily = quranFont,
+                            fontSize = 19.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -155,8 +188,7 @@ fun HomeScreen(
         Text(
             text = "الأقسام الرئيسية",
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(top = 4.dp)
+            fontWeight = FontWeight.Bold
         )
 
         // شبكة البطاقات الأربع (2×2)
@@ -166,17 +198,19 @@ fun HomeScreen(
         ) {
             DashboardCard(
                 title = "القرآن الكريم",
-                subtitle = "تصفح السور والتفسير",
+                subtitle = "المصحف والتفسير الميسر",
                 icon = Icons.AutoMirrored.Filled.MenuBook,
-                accentColor = Color(0xFF1B5E20),
+                accentColor = primary,
+                corner = corner,
                 modifier = Modifier.weight(1f),
                 onClick = onOpenQuran
             )
             DashboardCard(
-                title = "سماع القرآن",
-                subtitle = "تلاوات بأعذب الأصوات",
+                title = "المشغل الصوتي",
+                subtitle = "تلاوات كاملة متصلة",
                 icon = Icons.Default.Headphones,
-                accentColor = Color(0xFF0D47A1),
+                accentColor = Color(0xFF0277BD),
+                corner = corner,
                 modifier = Modifier.weight(1f),
                 onClick = onOpenAudioQuran
             )
@@ -190,7 +224,8 @@ fun HomeScreen(
                 title = "الأذكار والسبحة",
                 subtitle = "حصن المسلم والتسبيح",
                 icon = Icons.Default.BrightnessLow,
-                accentColor = Color(0xFF00695C),
+                accentColor = Color(0xFF00796B),
+                corner = corner,
                 modifier = Modifier.weight(1f),
                 onClick = onOpenAdhkar
             )
@@ -199,9 +234,38 @@ fun HomeScreen(
                 subtitle = "الوضوء والصلاة خطوة بخطوة",
                 icon = Icons.Default.Mosque,
                 accentColor = Color(0xFF8D6E63),
+                corner = corner,
                 modifier = Modifier.weight(1f),
                 onClick = onOpenPrayer
             )
+        }
+    }
+}
+
+@Composable
+private fun StatMiniCard(
+    label: String,
+    value: String,
+    icon: ImageVector,
+    corner: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier
+) {
+    val primary = MaterialTheme.colorScheme.primary
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(corner),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(icon, contentDescription = null, tint = primary, modifier = Modifier.size(22.dp))
+            Column {
+                Text(value, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = primary)
+                Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }
@@ -212,14 +276,15 @@ private fun DashboardCard(
     subtitle: String,
     icon: ImageVector,
     accentColor: Color,
+    corner: androidx.compose.ui.unit.Dp,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     Card(
         modifier = modifier
-            .height(145.dp)
+            .height(148.dp)
             .clickable { onClick() },
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(corner),
         elevation = CardDefaults.cardElevation(3.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
@@ -231,8 +296,8 @@ private fun DashboardCard(
         ) {
             Box(
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .size(50.dp)
+                    .clip(RoundedCornerShape(16.dp))
                     .background(accentColor.copy(alpha = 0.14f)),
                 contentAlignment = Alignment.Center
             ) {
@@ -257,6 +322,7 @@ private fun DashboardCard(
 fun SurahListScreen(
     isAudioMode: Boolean,
     settings: AppSettings,
+    uthmanicFont: FontFamily,
     onBack: () -> Unit,
     onSelectSurah: (SurahInfo) -> Unit
 ) {
@@ -265,13 +331,15 @@ fun SurahListScreen(
     var isLoading by remember { mutableStateOf(true) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var searchQuery by remember { mutableStateOf("") }
-    var filterType by remember { mutableStateOf("ALL") } // ALL, Meccan, Medinan
+    var filterType by remember { mutableStateOf("ALL") }
+    val corner = settings.cardCornerRadius.dp
+    val quranFont = if (settings.useUthmanicFont) uthmanicFont else FontFamily.Default
 
     LaunchedEffect(Unit) {
         try {
             surahs = QuranRepository.getSurahList(context)
             isLoading = false
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             errorMsg = "تعذر تحميل السور. تأكد من اتصالك بالإنترنت."
             isLoading = false
         }
@@ -286,7 +354,7 @@ fun SurahListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (isAudioMode) "سماع القرآن الكريم" else "فهرس السور") },
+                title = { Text(if (isAudioMode) "المشغل الصوتي المتصل" else "المصحف الشريف") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
@@ -314,7 +382,7 @@ fun SurahListScreen(
                         }
                     }
                 },
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(corner),
                 singleLine = true
             )
 
@@ -344,7 +412,7 @@ fun SurahListScreen(
                         contentPadding = PaddingValues(bottom = 16.dp)
                     ) {
                         items(filteredSurahs) { surah ->
-                            SurahGridItem(surah = surah, isAudioMode = isAudioMode, onClick = { onSelectSurah(surah) })
+                            SurahGridItem(surah, isAudioMode, corner, quranFont) { onSelectSurah(surah) }
                         }
                     }
                 }
@@ -354,7 +422,7 @@ fun SurahListScreen(
                         contentPadding = PaddingValues(bottom = 16.dp)
                     ) {
                         items(filteredSurahs) { surah ->
-                            SurahRowItem(surah = surah, isAudioMode = isAudioMode, onClick = { onSelectSurah(surah) })
+                            SurahRowItem(surah, isAudioMode, corner, quranFont) { onSelectSurah(surah) }
                         }
                     }
                 }
@@ -364,13 +432,19 @@ fun SurahListScreen(
 }
 
 @Composable
-private fun SurahRowItem(surah: SurahInfo, isAudioMode: Boolean, onClick: () -> Unit) {
+private fun SurahRowItem(
+    surah: SurahInfo,
+    isAudioMode: Boolean,
+    corner: androidx.compose.ui.unit.Dp,
+    quranFont: FontFamily,
+    onClick: () -> Unit
+) {
     val primary = MaterialTheme.colorScheme.primary
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(corner),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
@@ -383,15 +457,15 @@ private fun SurahRowItem(surah: SurahInfo, isAudioMode: Boolean, onClick: () -> 
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(12.dp))
                         .background(primary.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Text("${surah.number}", fontWeight = FontWeight.Bold, color = primary)
                 }
                 Column {
-                    Text(surah.name, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Text(surah.name, fontFamily = quranFont, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                     Text(
                         text = "${if (surah.revelationType == "Meccan") "مكية" else "مدنية"} • ${surah.numberOfAyahs} آية",
                         style = MaterialTheme.typography.bodySmall,
@@ -409,13 +483,19 @@ private fun SurahRowItem(surah: SurahInfo, isAudioMode: Boolean, onClick: () -> 
 }
 
 @Composable
-private fun SurahGridItem(surah: SurahInfo, isAudioMode: Boolean, onClick: () -> Unit) {
+private fun SurahGridItem(
+    surah: SurahInfo,
+    isAudioMode: Boolean,
+    corner: androidx.compose.ui.unit.Dp,
+    quranFont: FontFamily,
+    onClick: () -> Unit
+) {
     val primary = MaterialTheme.colorScheme.primary
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(corner)
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
@@ -424,14 +504,14 @@ private fun SurahGridItem(surah: SurahInfo, isAudioMode: Boolean, onClick: () ->
         ) {
             Box(
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(38.dp)
                     .clip(CircleShape)
                     .background(primary.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
                 Text("${surah.number}", fontWeight = FontWeight.Bold, color = primary)
             }
-            Text(surah.name, fontWeight = FontWeight.Bold, fontSize = 17.sp, maxLines = 1)
+            Text(surah.name, fontFamily = quranFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1)
             Text(
                 text = "${surah.numberOfAyahs} آية",
                 style = MaterialTheme.typography.labelSmall,
@@ -452,34 +532,38 @@ fun SurahDetailScreen(
     autoStartAudio: Boolean,
     settings: AppSettings,
     settingsManager: SettingsManager,
+    uthmanicFont: FontFamily,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
     var ayahs by remember { mutableStateOf<List<AyahItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
-    var selectedReciter by remember { mutableStateOf(settings.defaultReciter) }
-    var playingAyahIndex by remember { mutableIntStateOf(-1) }
+    var selectedReciterId by remember { mutableStateOf(settings.defaultReciterId) }
     var selectedTafsirAyah by remember { mutableStateOf<AyahItem?>(null) }
     var showReciterSheet by remember { mutableStateOf(false) }
 
+    // حالة المشغل الصوتي المستقل المتصل للسورة كاملة
+    var showPlayerBar by remember { mutableStateOf(autoStartAudio) }
+    var isPlaying by remember { mutableStateOf(false) }
+    var isBuffering by remember { mutableStateOf(false) }
+    var currentPosMs by remember { mutableIntStateOf(0) }
+    var totalDurationMs by remember { mutableIntStateOf(1) }
+
+    val corner = settings.cardCornerRadius.dp
+    val quranFont = if (settings.useUthmanicFont) uthmanicFont else FontFamily.Default
     val mediaPlayer = remember { MediaPlayer() }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            try {
-                if (mediaPlayer.isPlaying) mediaPlayer.stop()
-                mediaPlayer.release()
-            } catch (_: Exception) { }
-        }
+    fun formatTime(ms: Int): String {
+        val totalSec = (ms / 1000).coerceAtLeast(0)
+        val min = totalSec / 60
+        val sec = totalSec % 60
+        return "%02d:%02d".format(min, sec)
     }
 
-    fun playAyahAt(index: Int) {
-        if (index < 0 || index >= ayahs.size) {
-            playingAyahIndex = -1
-            return
-        }
-        val url = ayahs[index].audioUrl
-        if (url.isBlank()) return
+    fun startFullSurahPlayback() {
+        val url = QuranRepository.buildFullSurahAudioUrl(selectedReciterId, surahNumber)
+        showPlayerBar = true
+        isBuffering = true
         try {
             mediaPlayer.reset()
             mediaPlayer.setAudioAttributes(
@@ -490,40 +574,79 @@ fun SurahDetailScreen(
             )
             mediaPlayer.setDataSource(url)
             mediaPlayer.prepareAsync()
-            mediaPlayer.setOnPreparedListener {
-                playingAyahIndex = index
-                it.start()
+            mediaPlayer.setOnPreparedListener { mp ->
+                isBuffering = false
+                totalDurationMs = mp.duration.coerceAtLeast(1)
+                mp.start()
+                isPlaying = true
             }
             mediaPlayer.setOnCompletionListener {
-                if (settings.autoPlayNext && index + 1 < ayahs.size) {
-                    playAyahAt(index + 1)
-                } else {
-                    playingAyahIndex = -1
-                }
+                isPlaying = false
+                currentPosMs = 0
+            }
+            mediaPlayer.setOnErrorListener { _, _, _ ->
+                isBuffering = false
+                isPlaying = false
+                Toast.makeText(context, "تعذر تشغيل التلاوة، تأكد من الاتصال", Toast.LENGTH_SHORT).show()
+                true
             }
         } catch (_: Exception) {
-            playingAyahIndex = -1
+            isBuffering = false
+            isPlaying = false
         }
     }
 
-    LaunchedEffect(surahNumber, selectedReciter) {
+    LaunchedEffect(isPlaying) {
+        while (isPlaying) {
+            try {
+                if (mediaPlayer.isPlaying) {
+                    currentPosMs = mediaPlayer.currentPosition
+                }
+            } catch (_: Exception) { }
+            delay(500)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            try {
+                if (mediaPlayer.isPlaying) mediaPlayer.stop()
+                mediaPlayer.release()
+            } catch (_: Exception) { }
+        }
+    }
+
+    LaunchedEffect(surahNumber) {
         isLoading = true
-        settingsManager.saveLastRead(surahNumber, surahName)
         try {
-            ayahs = QuranRepository.getSurahDetails(context, surahNumber, selectedReciter)
+            ayahs = QuranRepository.getSurahDetails(context, surahNumber)
+            settingsManager.saveLastRead(surahNumber, surahName, ayahs.size)
             isLoading = false
-            if (autoStartAudio && ayahs.isNotEmpty()) {
-                playAyahAt(0)
+            if (autoStartAudio) {
+                startFullSurahPlayback()
             }
         } catch (_: Exception) {
             isLoading = false
         }
     }
+
+    val currentReciterName = QuranRepository.fullSurahReciters.find { it.id == selectedReciterId }?.name ?: ""
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(surahName) },
+                title = {
+                    Column {
+                        Text(surahName, fontFamily = quranFont, fontSize = 20.sp)
+                        if (ayahs.isNotEmpty()) {
+                            Text(
+                                "الجزء ${ayahs.first().juz} • الصفحة ${ayahs.first().page}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
@@ -531,25 +654,133 @@ fun SurahDetailScreen(
                 },
                 actions = {
                     IconButton(onClick = { showReciterSheet = true }) {
-                        Icon(Icons.Default.RecordVoiceOver, contentDescription = "اختيار القارئ")
+                        Icon(Icons.Default.RecordVoiceOver, contentDescription = "القارئ")
                     }
                     IconButton(
                         onClick = {
-                            if (playingAyahIndex >= 0) {
-                                try { mediaPlayer.stop() } catch (_: Exception) { }
-                                playingAyahIndex = -1
-                            } else if (ayahs.isNotEmpty()) {
-                                playAyahAt(0)
+                            if (showPlayerBar) {
+                                try {
+                                    if (mediaPlayer.isPlaying) mediaPlayer.stop()
+                                } catch (_: Exception) { }
+                                isPlaying = false
+                                showPlayerBar = false
+                            } else {
+                                startFullSurahPlayback()
                             }
                         }
                     ) {
                         Icon(
-                            imageVector = if (playingAyahIndex >= 0) Icons.Default.StopCircle else Icons.Default.PlayCircleFilled,
-                            contentDescription = "تشغيل السورة"
+                            imageVector = if (showPlayerBar) Icons.Default.Close else Icons.Default.Headphones,
+                            contentDescription = "المشغل الصوتي"
                         )
                     }
                 }
             )
+        },
+        bottomBar = {
+            // المشغل الصوتي المستقل المتكامل للسورة كاملة بدون تقطّع
+            if (showPlayerBar) {
+                Surface(
+                    tonalElevation = 8.dp,
+                    shadowElevation = 12.dp,
+                    shape = RoundedCornerShape(topStart = corner + 4.dp, topEnd = corner + 4.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(Icons.Default.GraphicEq, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                Text(
+                                    text = currentReciterName,
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.clickable { showReciterSheet = true }
+                                )
+                            }
+                            Text(
+                                text = "${formatTime(currentPosMs)} / ${formatTime(totalDurationMs)}",
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+
+                        Slider(
+                            value = currentPosMs.toFloat().coerceIn(0f, totalDurationMs.toFloat()),
+                            onValueChange = { newPos ->
+                                currentPosMs = newPos.toInt()
+                                try { mediaPlayer.seekTo(currentPosMs) } catch (_: Exception) { }
+                            },
+                            valueRange = 0f..totalDurationMs.toFloat()
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(
+                                onClick = {
+                                    val target = (currentPosMs - 10000).coerceAtLeast(0)
+                                    try { mediaPlayer.seekTo(target); currentPosMs = target } catch (_: Exception) { }
+                                }
+                            ) {
+                                Icon(Icons.Default.Replay10, contentDescription = "تأخير 10 ثواني")
+                            }
+
+                            FilledIconButton(
+                                onClick = {
+                                    if (isBuffering) return@FilledIconButton
+                                    try {
+                                        if (isPlaying) {
+                                            mediaPlayer.pause()
+                                            isPlaying = false
+                                        } else if (currentPosMs > 0) {
+                                            mediaPlayer.start()
+                                            isPlaying = true
+                                        } else {
+                                            startFullSurahPlayback()
+                                        }
+                                    } catch (_: Exception) {
+                                        startFullSurahPlayback()
+                                    }
+                                },
+                                modifier = Modifier.size(52.dp)
+                            ) {
+                                if (isBuffering) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                        contentDescription = "تشغيل/إيقاف",
+                                        modifier = Modifier.size(30.dp)
+                                    )
+                                }
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    val target = (currentPosMs + 10000).coerceAtMost(totalDurationMs)
+                                    try { mediaPlayer.seekTo(target); currentPosMs = target } catch (_: Exception) { }
+                                }
+                            ) {
+                                Icon(Icons.Default.Forward10, contentDescription = "تقديم 10 ثواني")
+                            }
+                        }
+                    }
+                }
+            }
         }
     ) { padding ->
         if (isLoading) {
@@ -557,7 +788,6 @@ fun SurahDetailScreen(
                 CircularProgressIndicator()
             }
         } else if (settings.isMushafMode) {
-            // وضع المصحف المتصل
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -566,16 +796,18 @@ fun SurahDetailScreen(
                     .padding(16.dp)
             ) {
                 Card(
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(corner),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     val combinedText = buildString {
                         ayahs.forEach { ayah ->
-                            append("${ayah.text} ﴿${ayah.numberInSurah}﴾ ")
+                            append(ayah.text)
+                            if (settings.showAyahMarkers) append(" ﴿${ayah.numberInSurah}﴾ ") else append(" ")
                         }
                     }
                     Text(
                         text = combinedText,
+                        fontFamily = quranFont,
                         fontSize = settings.fontSize.sp,
                         fontWeight = if (settings.isBoldFont) FontWeight.Bold else FontWeight.Normal,
                         lineHeight = (settings.fontSize * settings.lineSpacing).sp,
@@ -585,7 +817,6 @@ fun SurahDetailScreen(
                 }
             }
         } else {
-            // وضع البطاقات المنفصلة لكل آية
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -594,17 +825,10 @@ fun SurahDetailScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(vertical = 12.dp)
             ) {
-                items(ayahs.size) { idx ->
-                    val ayah = ayahs[idx]
-                    val isPlaying = playingAyahIndex == idx
+                items(ayahs) { ayah ->
                     Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isPlaying)
-                                MaterialTheme.colorScheme.primaryContainer
-                            else
-                                MaterialTheme.colorScheme.surface
-                        )
+                        shape = RoundedCornerShape(corner),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(
@@ -614,21 +838,14 @@ fun SurahDetailScreen(
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(CircleShape)
+                                        .size(34.dp)
+                                        .clip(RoundedCornerShape(10.dp))
                                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text("${ayah.numberInSurah}", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                 }
                                 Row {
-                                    IconButton(onClick = { playAyahAt(idx) }, modifier = Modifier.size(34.dp)) {
-                                        Icon(
-                                            if (isPlaying) Icons.Default.GraphicEq else Icons.Default.VolumeUp,
-                                            contentDescription = "استماع",
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
                                     IconButton(onClick = { selectedTafsirAyah = ayah }, modifier = Modifier.size(34.dp)) {
                                         Icon(Icons.Default.Info, contentDescription = "التفسير", tint = MaterialTheme.colorScheme.primary)
                                     }
@@ -658,7 +875,8 @@ fun SurahDetailScreen(
                                 }
                             }
                             Text(
-                                text = ayah.text,
+                                text = if (settings.showAyahMarkers) "${ayah.text} ﴿${ayah.numberInSurah}﴾" else ayah.text,
+                                fontFamily = quranFont,
                                 fontSize = settings.fontSize.sp,
                                 fontWeight = if (settings.isBoldFont) FontWeight.Bold else FontWeight.Normal,
                                 lineHeight = (settings.fontSize * settings.lineSpacing).sp
@@ -673,7 +891,7 @@ fun SurahDetailScreen(
     if (selectedTafsirAyah != null) {
         AlertDialog(
             onDismissRequest = { selectedTafsirAyah = null },
-            title = { Text("التفسير الميسر - آية ${selectedTafsirAyah!!.numberInSurah}") },
+            title = { Text("التفسير الميسر • آية ${selectedTafsirAyah!!.numberInSurah}") },
             text = { Text(selectedTafsirAyah!!.tafsir, lineHeight = 26.sp) },
             confirmButton = {
                 TextButton(onClick = { selectedTafsirAyah = null }) { Text("إغلاق") }
@@ -684,23 +902,24 @@ fun SurahDetailScreen(
     if (showReciterSheet) {
         AlertDialog(
             onDismissRequest = { showReciterSheet = false },
-            title = { Text("اختر القارئ") },
+            title = { Text("اختر القارئ (تلاوة متصلة)") },
             text = {
-                Column {
-                    QuranRepository.reciters.forEach { (id, name) ->
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    QuranRepository.fullSurahReciters.forEach { reciter ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    selectedReciter = id
+                                    selectedReciterId = reciter.id
                                     showReciterSheet = false
+                                    if (showPlayerBar) startFullSurahPlayback()
                                 }
                                 .padding(vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            RadioButton(selected = selectedReciter == id, onClick = null)
+                            RadioButton(selected = selectedReciterId == reciter.id, onClick = null)
                             Spacer(Modifier.width(8.dp))
-                            Text(name)
+                            Text(reciter.name)
                         }
                     }
                 }
@@ -719,6 +938,7 @@ fun AdhkarScreen(settings: AppSettings, settingsManager: SettingsManager) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var tasbihCount by remember { mutableIntStateOf(settings.tasbihCount) }
     val countsMap = remember { mutableStateMapOf<String, Int>() }
+    val corner = settings.cardCornerRadius.dp
 
     fun triggerVibrate() {
         if (!settings.vibrateOnTasbih) return
@@ -761,7 +981,7 @@ fun AdhkarScreen(settings: AppSettings, settingsManager: SettingsManager) {
                 Spacer(Modifier.height(24.dp))
                 Box(
                     modifier = Modifier
-                        .size(210.dp)
+                        .size(220.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
                         .border(4.dp, MaterialTheme.colorScheme.primary, CircleShape)
@@ -775,7 +995,7 @@ fun AdhkarScreen(settings: AppSettings, settingsManager: SettingsManager) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = "$tasbihCount",
-                            fontSize = 48.sp,
+                            fontSize = 50.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -809,7 +1029,7 @@ fun AdhkarScreen(settings: AppSettings, settingsManager: SettingsManager) {
                                     triggerVibrate()
                                 }
                             },
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(corner)
                     ) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Row(
@@ -831,7 +1051,7 @@ fun AdhkarScreen(settings: AppSettings, settingsManager: SettingsManager) {
                                     )
                                 }
                             }
-                            Text(item.subtitle, lineHeight = 24.sp)
+                            Text(item.subtitle, lineHeight = 25.sp)
                         }
                     }
                 }
@@ -842,9 +1062,10 @@ fun AdhkarScreen(settings: AppSettings, settingsManager: SettingsManager) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PrayerGuideScreen(onBack: () -> Unit) {
+fun PrayerGuideScreen(settings: AppSettings, onBack: () -> Unit) {
     val tabs = QuranRepository.prayerSteps.keys.toList()
     var selectedTab by remember { mutableIntStateOf(0) }
+    val corner = settings.cardCornerRadius.dp
 
     Scaffold(
         topBar = {
@@ -868,7 +1089,7 @@ fun PrayerGuideScreen(onBack: () -> Unit) {
             val steps = QuranRepository.prayerSteps[tabs[selectedTab]] ?: emptyList()
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(steps) { step ->
-                    Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                    Card(shape = RoundedCornerShape(corner), modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(step.title, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, fontSize = 17.sp)
                             Text(step.subtitle, lineHeight = 25.sp)
@@ -882,10 +1103,14 @@ fun PrayerGuideScreen(onBack: () -> Unit) {
 
 @Composable
 fun BookmarksScreen(
+    settings: AppSettings,
+    uthmanicFont: FontFamily,
     settingsManager: SettingsManager,
     onOpenSurah: (Int, String) -> Unit
 ) {
     var bookmarks by remember { mutableStateOf(settingsManager.getBookmarks()) }
+    val corner = settings.cardCornerRadius.dp
+    val quranFont = if (settings.useUthmanicFont) uthmanicFont else FontFamily.Default
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("الإشارات المرجعية", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -906,7 +1131,7 @@ fun BookmarksScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onOpenSurah(item.surahNumber, item.surahName) },
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(corner)
                     ) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Row(
@@ -915,7 +1140,7 @@ fun BookmarksScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    "${item.surahName} - آية ${item.ayahNumber}",
+                                    "${item.surahName} • آية ${item.ayahNumber}",
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary
                                 )
@@ -929,7 +1154,7 @@ fun BookmarksScreen(
                                     Icon(Icons.Default.DeleteOutline, contentDescription = "حذف", tint = MaterialTheme.colorScheme.error)
                                 }
                             }
-                            Text(item.ayahText, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(item.ayahText, fontFamily = quranFont, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
@@ -941,12 +1166,23 @@ fun BookmarksScreen(
 @Composable
 fun SettingsScreen(
     settings: AppSettings,
+    uthmanicFont: FontFamily,
     settingsManager: SettingsManager,
+    onRequestNotificationPermission: () -> Unit,
     onUpdateSettings: (AppSettings) -> Unit
 ) {
     val context = LocalContext.current
-    val themeNames = listOf("الأخضر الزمردي", "الأزرق الملكي", "الذهبي الدافئ", "الورقي الكلاسيكي")
-    val themeColors = listOf(Color(0xFF1B5E20), Color(0xFF0D47A1), Color(0xFF8D6E63), Color(0xFF5D4037))
+    val corner = settings.cardCornerRadius.dp
+    val quranFont = if (settings.useUthmanicFont) uthmanicFont else FontFamily.Default
+
+    val themeColors = listOf(
+        Color(0xFF1B5E20), // الأخضر الملكي
+        Color(0xFF0D47A1), // الكحلي
+        Color(0xFF8D6E63), // الذهبي الأندلسي
+        Color(0xFF5D4037), // الورقي الكلاسيكي
+        Color(0xFF00695C), // الفيروزي
+        Color(0xFF4A148C)  // الأرجواني الهادئ
+    )
 
     Column(
         modifier = Modifier
@@ -955,32 +1191,56 @@ fun SettingsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("مركز التحكم والإعدادات", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("مركز التحكم والإعدادات", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primaryContainer) {
+                Text(
+                    "الإصدار 2.0",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
 
-        // 1. معاينة الخط وتخصيصه
-        Card(shape = RoundedCornerShape(18.dp)) {
+        // 1. الخط العثماني والمعاينة الحية
+        Card(shape = RoundedCornerShape(corner)) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("الخط والقراءة", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text("الخط العثماني والقراءة", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(corner))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(14.dp),
+                        .padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "﴿ بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ ﴾",
+                        fontFamily = quranFont,
                         fontSize = settings.fontSize.sp,
                         fontWeight = if (settings.isBoldFont) FontWeight.Bold else FontWeight.Normal,
                         lineHeight = (settings.fontSize * settings.lineSpacing).sp
                     )
                 }
+                SettingSwitchRow("استخدام الخط العثماني الأصلي (مجمع الملك فهد)", settings.useUthmanicFont) {
+                    onUpdateSettings(settings.copy(useUthmanicFont = it))
+                }
                 Text("حجم خط الآيات: ${settings.fontSize.toInt()}")
                 Slider(
                     value = settings.fontSize,
                     onValueChange = { onUpdateSettings(settings.copy(fontSize = it)) },
-                    valueRange = 18f..36f
+                    valueRange = 18f..38f
+                )
+                Text("تباعد الأسطر: ${String.format("%.1f", settings.lineSpacing)}")
+                Slider(
+                    value = settings.lineSpacing,
+                    onValueChange = { onUpdateSettings(settings.copy(lineSpacing = it)) },
+                    valueRange = 1.3f..2.3f
                 )
                 SettingSwitchRow("خط عريض وواضح", settings.isBoldFont) {
                     onUpdateSettings(settings.copy(isBoldFont = it))
@@ -988,22 +1248,25 @@ fun SettingsScreen(
                 SettingSwitchRow("وضع المصحف المتصل (صفحة مترابطة)", settings.isMushafMode) {
                     onUpdateSettings(settings.copy(isMushafMode = it))
                 }
+                SettingSwitchRow("إظهار فواصل وأرقام الآيات ﴿١﴾", settings.showAyahMarkers) {
+                    onUpdateSettings(settings.copy(showAyahMarkers = it))
+                }
             }
         }
 
-        // 2. المظهر والألوان
-        Card(shape = RoundedCornerShape(18.dp)) {
+        // 2. المظهر والألوان والزوايا
+        Card(shape = RoundedCornerShape(corner)) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("المظهر والألوان", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text("الألوان والزوايا والتصميم", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 SettingSwitchRow("الوضع الليلي المريح للعين", settings.isDarkMode) {
                     onUpdateSettings(settings.copy(isDarkMode = it))
                 }
-                Text("لون ثيم التطبيق:", style = MaterialTheme.typography.bodyMedium)
+                Text("ثيم ألوان التطبيق (6 ألوان):", style = MaterialTheme.typography.bodyMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     themeColors.forEachIndexed { idx, color ->
                         Box(
                             modifier = Modifier
-                                .size(42.dp)
+                                .size(40.dp)
                                 .clip(CircleShape)
                                 .background(color)
                                 .border(
@@ -1015,18 +1278,17 @@ fun SettingsScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             if (settings.themeIndex == idx) {
-                                Icon(Icons.Default.Check, contentDescription = themeNames[idx], tint = Color.White)
+                                Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                             }
                         }
                     }
                 }
-            }
-        }
-
-        // 3. طريقة التنقل والعرض
-        Card(shape = RoundedCornerShape(18.dp)) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("التنقل وطريقة العرض", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text("انحناء زوايا البطاقات: ${settings.cardCornerRadius.toInt()}dp")
+                Slider(
+                    value = settings.cardCornerRadius,
+                    onValueChange = { onUpdateSettings(settings.copy(cardCornerRadius = it)) },
+                    valueRange = 8f..30f
+                )
                 SettingSwitchRow("إظهار النصوص تحت أيقونات الشريط السفلي", settings.showNavLabels) {
                     onUpdateSettings(settings.copy(showNavLabels = it))
                 }
@@ -1039,35 +1301,58 @@ fun SettingsScreen(
             }
         }
 
-        // 4. الصوتيات والتنبيهات
-        Card(shape = RoundedCornerShape(18.dp)) {
+        // 3. الإشعارات والأذونات
+        Card(shape = RoundedCornerShape(corner)) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("الصوتيات والتسبيح", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                SettingSwitchRow("التشغيل التلقائي المتواصل للسورة", settings.autoPlayNext) {
-                    onUpdateSettings(settings.copy(autoPlayNext = it))
+                Text("الإشعارات والتنبيهات", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                SettingSwitchRow("تفعيل إشعارات الأذكار والورد اليومي", settings.notificationsEnabled) { enabled ->
+                    onUpdateSettings(settings.copy(notificationsEnabled = enabled))
+                    if (enabled) onRequestNotificationPermission()
                 }
+                OutlinedButton(
+                    onClick = {
+                        onRequestNotificationPermission()
+                        QuranNotificationHelper.showReminderNotification(
+                            context,
+                            "وردك القرآني اليومي",
+                            "لا تنسَ قراءة وردك من القرآن الكريم وأذكار الصباح والمساء."
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.NotificationsActive, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("إرسال إشعار تجريبي الآن")
+                }
+            }
+        }
+
+        // 4. الصوتيات والتسبيح
+        Card(shape = RoundedCornerShape(corner)) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("المشغل الصوتي والتسبيح", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 SettingSwitchRow("الاهتزاز الخفيف عند التسبيح", settings.vibrateOnTasbih) {
                     onUpdateSettings(settings.copy(vibrateOnTasbih = it))
                 }
-                Text("القارئ الافتراضي:", fontWeight = FontWeight.Medium)
-                QuranRepository.reciters.forEach { (id, name) ->
+                Text("القارئ الافتراضي للتلاوة المتصلة:", fontWeight = FontWeight.Medium)
+                QuranRepository.fullSurahReciters.forEach { reciter ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onUpdateSettings(settings.copy(defaultReciter = id)) }
+                            .clickable { onUpdateSettings(settings.copy(defaultReciterId = reciter.id)) }
                             .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RadioButton(selected = settings.defaultReciter == id, onClick = null)
+                        RadioButton(selected = settings.defaultReciterId == reciter.id, onClick = null)
                         Spacer(Modifier.width(8.dp))
-                        Text(name)
+                        Text(reciter.name)
                     }
                 }
             }
         }
 
-        // 5. إدارة البيانات
-        Card(shape = RoundedCornerShape(18.dp)) {
+        // 5. إدارة التخزين والبيانات
+        Card(shape = RoundedCornerShape(corner)) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("إدارة التخزين والبيانات", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 OutlinedButton(
