@@ -24,20 +24,42 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Complete Truncated Screens.kt Automatically
+      - name: Repair Screens.kt Truncation & Duplicates
         run: |
           python3 - << 'PY'
           p = "app/src/main/java/com/quran/app/Screens.kt"
           txt = open(p, encoding="utf-8").read()
-          cut = txt.rfind("item {")
-          if cut != -1 and "fun formatMillis" not in txt:
-              txt = txt[:cut] + """item { Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = CardCream)) { Text("v3.0", modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Bold) } } } } }
+          first_pkg = txt.find("package com.quran.app")
+          second_pkg = txt.find("package com.quran.app", first_pkg + 10)
+          if second_pkg != -1:
+              txt = txt[second_pkg:]
+          cut = txt.rfind("fun SettingsScreen")
+          if cut != -1:
+              txt = txt[:cut] + """fun SettingsScreen(onBack: () -> Unit) {
+              val context = LocalContext.current; val view = LocalView.current; val settings by AppPreferences.settings.collectAsState()
+              Column(modifier = Modifier.fillMaxSize().background(IvoryBg)) {
+                  Surface(color = EmeraldPrimary) {
+                      Row(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                          IconButton(onClick = { AppPreferences.playTouchSound(view); onBack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White) }
+                          Text("الإعدادات", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                      }
+                  }
+                  Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                      SettingSwitchRow("صوت اللمس", "تفعيل صوت النقرات", Icons.Default.VolumeUp, settings.touchSoundEnabled) { AppPreferences.setTouchSound(context, it) }
+                      SettingSwitchRow("الاهتزاز", "اهتزاز المسبحة والأذكار", Icons.Default.Vibration, settings.vibrationEnabled) { AppPreferences.setVibration(context, it) }
+                      SettingSwitchRow("الوضع الليلي للمصحف", "قراءة مريحة ليلاً", Icons.Default.DarkMode, settings.nightMushafMode) { AppPreferences.setNightMushafMode(context, it) }
+                      SettingSwitchRow("إبقاء الشاشة مضاءة", "منع انطفاء الشاشة", Icons.Default.LightMode, settings.keepScreenOn) { AppPreferences.setKeepScreenOn(context, it) }
+                  }
+              }
+          }
 
           @Composable
           private fun SettingSwitchRow(title: String, subtitle: String, icon: ImageVector, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-              Row(modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                  Column(modifier = Modifier.weight(1f)) { Text(title, fontWeight = FontWeight.Bold, color = TextDark); Text(subtitle, fontSize = 12.sp, color = TextMuted) }
-                  Switch(checked = checked, onCheckedChange = onCheckedChange)
+              Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = CardCream)) {
+                  Row(modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                      Column(modifier = Modifier.weight(1f)) { Text(title, fontWeight = FontWeight.Bold, color = TextDark); Text(subtitle, fontSize = 12.sp, color = TextMuted) }
+                      Switch(checked = checked, onCheckedChange = onCheckedChange)
+                  }
               }
           }
 
@@ -57,7 +79,7 @@ jobs:
               } catch (_: Exception) { }
           }
           """
-              open(p, "w", encoding="utf-8").write(txt)
+          open(p, "w", encoding="utf-8").write(txt)
           PY
 
       - name: Generate Persistent Keystore
