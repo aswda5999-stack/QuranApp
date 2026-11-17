@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Clean Quran APK
 
 on:
   push:
@@ -24,72 +24,11 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Repair AppData.kt & Screens.kt
+      - name: Build Clean Sources
         run: |
-          python3 - << 'PY'
-          for name in ["AppData.kt", "Screens.kt"]:
-              p = f"app/src/main/java/com/quran/app/{name}"
-              txt = open(p, encoding="utf-8").read()
-              last_pkg = txt.rfind("package com.quran.app")
-              if last_pkg > 0:
-                  txt = txt[last_pkg:]
-              open(p, "w", encoding="utf-8").write(txt)
-
-          p = "app/src/main/java/com/quran/app/Screens.kt"
-          txt = open(p, encoding="utf-8").read()
-          cut = txt.rfind("fun SettingsScreen")
-          if cut != -1:
-              txt = txt[:cut] + """fun SettingsScreen(onBack: () -> Unit) {
-              val context = LocalContext.current; val view = LocalView.current; val settings by AppPreferences.settings.collectAsState()
-              Column(modifier = Modifier.fillMaxSize().background(IvoryBg)) {
-                  Surface(color = EmeraldPrimary) {
-                      Row(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                          IconButton(onClick = { AppPreferences.playTouchSound(view); onBack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White) }
-                          Text("الإعدادات", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                      }
-                  }
-                  Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                      SettingSwitchRow("صوت اللمس", "تفعيل صوت النقرات", Icons.Default.VolumeUp, settings.touchSoundEnabled) { AppPreferences.setTouchSound(context, it) }
-                      SettingSwitchRow("الاهتزاز", "اهتزاز المسبحة والأذكار", Icons.Default.Vibration, settings.vibrationEnabled) { AppPreferences.setVibration(context, it) }
-                      SettingSwitchRow("الوضع الليلي للمصحف", "قراءة مريحة ليلاً", Icons.Default.DarkMode, settings.nightMushafMode) { AppPreferences.setNightMushafMode(context, it) }
-                      SettingSwitchRow("إبقاء الشاشة مضاءة", "منع انطفاء الشاشة", Icons.Default.LightMode, settings.keepScreenOn) { AppPreferences.setKeepScreenOn(context, it) }
-                  }
-              }
-          }
-
-          @Composable
-          private fun SettingSwitchRow(title: String, subtitle: String, icon: ImageVector, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-              Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = CardCream)) {
-                  Row(modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                      Column(modifier = Modifier.weight(1f)) { Text(title, fontWeight = FontWeight.Bold, color = TextDark); Text(subtitle, fontSize = 12.sp, color = TextMuted) }
-                      Switch(checked = checked, onCheckedChange = onCheckedChange)
-                  }
-              }
-          }
-
-          private fun formatMillis(ms: Long): String {
-              val s = (ms / 1000L).coerceAtLeast(0L)
-              return String.format("%02d:%02d", s / 60, s % 60)
-          }
-
-          private fun shareText(context: Context, text: String) {
-              context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }, "مشاركة"))
-          }
-
-          private fun triggerVibration(context: Context, durationMs: Long) {
-              try {
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
-                  else @Suppress("DEPRECATION") (context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator).vibrate(durationMs)
-              } catch (_: Exception) { }
-          }
-          """
-              open(p, "w", encoding="utf-8").write(txt)
-          PY
-
-      - name: Generate Persistent Keystore
-        run: |
-          mkdir -p app
-          keytool -genkeypair -v -keystore app/release.jks -alias quran_key -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=QuranApp, OU=Dev, O=Quran, L=Aleppo, S=Syria, C=SY"
+          rm -rf app/src/main/java/com/quran/app
+          mkdir -p app/src/main/java/com/quran/app
+          python3 scripts/generate_app.py
 
       - name: Build Debug APK
         run: gradle assembleDebug
