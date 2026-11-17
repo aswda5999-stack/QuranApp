@@ -24,14 +24,41 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Auto-Fix Screens.kt Syntax
+      - name: Complete Truncated Screens.kt Automatically
         run: |
-          python3 -c '
+          python3 - << 'PY'
           p = "app/src/main/java/com/quran/app/Screens.kt"
           txt = open(p, encoding="utf-8").read()
-          txt = txt.replace("shareText(context, \"${hadith.title}\\n\\n${hadith.text}\\n\\nالراوي: ${hadith.narrator} (${hadith.source})\") })", "shareText(context, \"${hadith.title}\\n\\n${hadith.text}\\n\\nالراوي: ${hadith.narrator} (${hadith.source})\") })")
-          open(p, "w", encoding="utf-8").write(txt)
-          '
+          cut = txt.rfind("item {")
+          if cut != -1 and "fun formatMillis" not in txt:
+              txt = txt[:cut] + """item { Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = CardCream)) { Text("v3.0", modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Bold) } } } } }
+
+          @Composable
+          private fun SettingSwitchRow(title: String, subtitle: String, icon: ImageVector, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+              Row(modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                  Column(modifier = Modifier.weight(1f)) { Text(title, fontWeight = FontWeight.Bold, color = TextDark); Text(subtitle, fontSize = 12.sp, color = TextMuted) }
+                  Switch(checked = checked, onCheckedChange = onCheckedChange)
+              }
+          }
+
+          private fun formatMillis(ms: Long): String {
+              val s = (ms / 1000L).coerceAtLeast(0L)
+              return String.format("%02d:%02d", s / 60, s % 60)
+          }
+
+          private fun shareText(context: Context, text: String) {
+              context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }, "مشاركة"))
+          }
+
+          private fun triggerVibration(context: Context, durationMs: Long) {
+              try {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
+                  else @Suppress("DEPRECATION") (context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator).vibrate(durationMs)
+              } catch (_: Exception) { }
+          }
+          """
+              open(p, "w", encoding="utf-8").write(txt)
+          PY
 
       - name: Generate Persistent Keystore
         run: |
