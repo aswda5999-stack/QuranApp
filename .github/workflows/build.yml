@@ -24,571 +24,26 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Clean & Write Clean Source Files
+      - name: Fix Missing Helper Functions in Screens.kt
         run: |
-          mkdir -p app/src/main/java/com/quran/app
-          cat << 'EOF' > app/src/main/java/com/quran/app/AppData.kt
-          package com.quran.app
-
-          import android.content.Context
-          import android.view.SoundEffectConstants
-          import android.view.View
-          import kotlinx.coroutines.Dispatchers
-          import kotlinx.coroutines.flow.MutableStateFlow
-          import kotlinx.coroutines.flow.StateFlow
-          import kotlinx.coroutines.flow.asStateFlow
-          import kotlinx.coroutines.withContext
-          import java.io.File
-          import java.io.FileOutputStream
-          import java.net.HttpURLConnection
-          import java.net.URL
-
-          data class SurahInfo(val number: Int, val name: String, val type: String, val ayahCount: Int, val startPage: Int)
-          data class ReciterInfo(val id: String, val name: String, val style: String, val audioBaseUrl: String, val imageUrl: String)
-          data class HadithItem(val id: Int, val title: String, val text: String, val narrator: String, val source: String, val explanation: String)
-          data class DhikrItem(val id: Int, val category: String, val text: String, val targetCount: Int, val reward: String)
-
-          data class AppSettingsState(
-              val touchSoundEnabled: Boolean = true,
-              val vibrationEnabled: Boolean = true,
-              val nightMushafMode: Boolean = false,
-              val keepScreenOn: Boolean = true,
-              val lastReadPage: Int = 1,
-              val lastReadSurahName: String = "سورة الفاتحة",
-              val selectedReciterId: String = "afs",
-              val totalTasbihCount: Int = 0
-          )
-
-          object AppPreferences {
-              private const val PREFS_NAME = "quran_app_v3_prefs"
-              private val _settings = MutableStateFlow(AppSettingsState())
-              val settings: StateFlow<AppSettingsState> = _settings.asStateFlow()
-
-              fun init(context: Context) {
-                  val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                  _settings.value = AppSettingsState(
-                      touchSoundEnabled = prefs.getBoolean("touch_sound", true),
-                      vibrationEnabled = prefs.getBoolean("vibration", true),
-                      nightMushafMode = prefs.getBoolean("night_mushaf", false),
-                      keepScreenOn = prefs.getBoolean("keep_screen_on", true),
-                      lastReadPage = prefs.getInt("last_read_page", 1).coerceIn(1, 604),
-                      lastReadSurahName = prefs.getString("last_read_surah", "سورة الفاتحة") ?: "سورة الفاتحة",
-                      selectedReciterId = prefs.getString("selected_reciter", "afs") ?: "afs",
-                      totalTasbihCount = prefs.getInt("total_tasbih", 0)
-                  )
-              }
-
-              fun playTouchSound(view: View?) {
-                  if (_settings.value.touchSoundEnabled) view?.playSoundEffect(SoundEffectConstants.CLICK)
-              }
-
-              fun setTouchSound(context: Context, enabled: Boolean) {
-                  _settings.value = _settings.value.copy(touchSoundEnabled = enabled)
-                  context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putBoolean("touch_sound", enabled).apply()
-              }
-
-              fun setVibration(context: Context, enabled: Boolean) {
-                  _settings.value = _settings.value.copy(vibrationEnabled = enabled)
-                  context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putBoolean("vibration", enabled).apply()
-              }
-
-              fun setNightMushafMode(context: Context, enabled: Boolean) {
-                  _settings.value = _settings.value.copy(nightMushafMode = enabled)
-                  context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putBoolean("night_mushaf", enabled).apply()
-              }
-
-              fun setKeepScreenOn(context: Context, enabled: Boolean) {
-                  _settings.value = _settings.value.copy(keepScreenOn = enabled)
-                  context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putBoolean("keep_screen_on", enabled).apply()
-              }
-
-              fun updateLastRead(context: Context, page: Int, surahName: String) {
-                  val safePage = page.coerceIn(1, 604)
-                  _settings.value = _settings.value.copy(lastReadPage = safePage, lastReadSurahName = surahName)
-                  context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putInt("last_read_page", safePage).putString("last_read_surah", surahName).apply()
-              }
-
-              fun setSelectedReciter(context: Context, reciterId: String) {
-                  _settings.value = _settings.value.copy(selectedReciterId = reciterId)
-                  context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putString("selected_reciter", reciterId).apply()
-              }
-
-              fun incrementTotalTasbih(context: Context) {
-                  val updated = _settings.value.totalTasbihCount + 1
-                  _settings.value = _settings.value.copy(totalTasbihCount = updated)
-                  context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putInt("total_tasbih", updated).apply()
-              }
-
-              fun getFavoritePages(context: Context): Set<Int> {
-                  val raw = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getStringSet("favorite_pages", emptySet()) ?: emptySet()
-                  return raw.mapNotNull { it.toIntOrNull() }.toSet()
-              }
-
-              fun toggleFavoritePage(context: Context, page: Int): Set<Int> {
-                  val current = getFavoritePages(context).toMutableSet()
-                  if (current.contains(page)) current.remove(page) else current.add(page)
-                  context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putStringSet("favorite_pages", current.map { it.toString() }.toSet()).apply()
-                  return current
-              }
-          }
-
-          object AudioDownloadManager {
-              private val _downloadProgress = MutableStateFlow>(emptyMap())
-              val downloadProgress: StateFlow> = _downloadProgress.asStateFlow()
-
-              private fun key(reciterId: String, surahNumber: Int): String = "${reciterId}_$surahNumber"
-
-              fun getLocalAudioFile(context: Context, reciterId: String, surahNumber: Int): File {
-                  val dir = File(context.filesDir, "quran_audio/$reciterId")
-                  if (!dir.exists()) dir.mkdirs()
-                  return File(dir, "${surahNumber.toString().padStart(3, '0')}.mp3")
-              }
-
-              fun isSurahDownloaded(context: Context, reciterId: String, surahNumber: Int): Boolean {
-                  val file = getLocalAudioFile(context, reciterId, surahNumber)
-                  return file.exists() && file.length() > 2048L
-              }
-
-              fun getDownloadedCount(context: Context, reciterId: String): Int {
-                  val dir = File(context.filesDir, "quran_audio/$reciterId")
-                  return if (!dir.exists()) 0 else dir.listFiles()?.count { it.extension == "mp3" && it.length() > 2048L } ?: 0
-              }
-
-              suspend fun downloadSurah(context: Context, reciter: ReciterInfo, surahNumber: Int): Boolean = withContext(Dispatchers.IO) {
-                  val taskKey = key(reciter.id, surahNumber)
-                  if (_downloadProgress.value.containsKey(taskKey)) return@withContext false
-                  val targetFile = getLocalAudioFile(context, reciter.id, surahNumber)
-                  val tempFile = File(targetFile.parentFile, "${targetFile.name}.tmp")
-                  val urlString = "${reciter.audioBaseUrl}/${surahNumber.toString().padStart(3, '0')}.mp3"
-                  try {
-                      _downloadProgress.value = _downloadProgress.value + (taskKey to 1)
-                      val conn = (URL(urlString).openConnection() as HttpURLConnection).apply {
-                          connectTimeout = 15000; readTimeout = 20000; instanceFollowRedirects = true; connect()
-                      }
-                      if (conn.responseCode !in 200..299) {
-                          _downloadProgress.value = _downloadProgress.value - taskKey
-                          return@withContext false
-                      }
-                      val totalBytes = conn.contentLength.toLong()
-                      conn.inputStream.use { input ->
-                          FileOutputStream(tempFile).use { output ->
-                              val buffer = ByteArray(8192)
-                              var copied = 0L
-                              var read: Int
-                              while (input.read(buffer).also { read = it } != -1) {
-                                  output.write(buffer, 0, read)
-                                  copied += read
-                                  val pct = if (totalBytes > 0L) ((copied * 100L) / totalBytes).toInt().coerceIn(1, 99) else 50
-                                  _downloadProgress.value = _downloadProgress.value + (taskKey to pct)
-                              }
-                          }
-                      }
-                      if (tempFile.exists() && tempFile.length() > 2048L) {
-                          if (targetFile.exists()) targetFile.delete()
-                          tempFile.renameTo(targetFile)
-                          _downloadProgress.value = _downloadProgress.value - taskKey
-                          return@withContext true
-                      }
-                  } catch (_: Exception) { }
-                  tempFile.delete()
-                  _downloadProgress.value = _downloadProgress.value - taskKey
-                  false
-              }
-          }
-
-          object QuranRepository {
-              const val TOTAL_MUSHAF_PAGES = 604
-              fun getMushafPageImageUrl(pageNumber: Int): String = "https://android.quran.com/data/width_1024/page${pageNumber.coerceIn(1, 604).toString().padStart(3, '0')}.png"
-
-              val reciters = listOf(
-                  ReciterInfo("afs", "مشاري راشد العفاسي", "حفص عن عاصم - مرتل", "https://server8.mp3quran.net/afs", "https://static.qurancdn.com/images/reciters/6/mishary-rashid-alafasy-profile.jpeg"),
-                  ReciterInfo("basit", "عبد الباسط عبد الصمد", "المصحف المرتل", "https://server7.mp3quran.net/basit", "https://static.qurancdn.com/images/reciters/1/abdulbaset-abdulsamad-profile.jpeg"),
-                  ReciterInfo("maher", "ماهر المعيقلي", "حفص عن عاصم - مرتل", "https://server12.mp3quran.net/maher", "https://static.qurancdn.com/images/reciters/10/maher-al-muaiqly-profile.jpeg"),
-                  ReciterInfo("s_gmd", "سعد الغامدي", "حفص عن عاصم - مرتل", "https://server7.mp3quran.net/s_gmd", "https://static.qurancdn.com/images/reciters/7/saad-al-ghamdi-profile.jpeg"),
-                  ReciterInfo("yasser", "ياسر الدوسري", "حفص عن عاصم - مرتل", "https://server11.mp3quran.net/yasser", "https://static.qurancdn.com/images/reciters/11/yasser-ad-dussary-profile.jpeg")
-              )
-
-              val surahs = listOf(
-                  SurahInfo(1, "سورة الفاتحة", "مكية", 7, 1), SurahInfo(2, "سورة البقرة", "مدنية", 286, 2),
-                  SurahInfo(3, "سورة آل عمران", "مدنية", 200, 50), SurahInfo(4, "سورة النساء", "مدنية", 176, 77),
-                  SurahInfo(5, "سورة المائدة", "مدنية", 120, 106), SurahInfo(6, "سورة الأنعام", "مكية", 165, 128),
-                  SurahInfo(7, "سورة الأعراف", "مكية", 206, 151), SurahInfo(8, "سورة الأنفال", "مدنية", 75, 177),
-                  SurahInfo(9, "سورة التوبة", "مدنية", 129, 187), SurahInfo(10, "سورة يونس", "مكية", 109, 208),
-                  SurahInfo(11, "سورة هود", "مكية", 123, 221), SurahInfo(12, "سورة يوسف", "مكية", 111, 235),
-                  SurahInfo(13, "سورة الرعد", "مدنية", 43, 249), SurahInfo(14, "سورة إبراهيم", "مكية", 52, 255),
-                  SurahInfo(15, "سورة الحجر", "مكية", 99, 262), SurahInfo(16, "سورة النحل", "مكية", 128, 267),
-                  SurahInfo(17, "سورة الإسراء", "مكية", 111, 282), SurahInfo(18, "سورة الكهف", "مكية", 110, 293),
-                  SurahInfo(19, "سورة مريم", "مكية", 98, 305), SurahInfo(20, "سورة طه", "مكية", 135, 312),
-                  SurahInfo(21, "سورة الأنبياء", "مكية", 112, 322), SurahInfo(22, "سورة الحج", "مدنية", 78, 332),
-                  SurahInfo(23, "سورة المؤمنون", "مكية", 118, 342), SurahInfo(24, "سورة النور", "مدنية", 64, 350),
-                  SurahInfo(25, "سورة الفرقان", "مكية", 77, 359), SurahInfo(26, "سورة الشعراء", "مكية", 227, 367),
-                  SurahInfo(27, "سورة النمل", "مكية", 93, 377), SurahInfo(28, "سورة القصص", "مكية", 88, 385),
-                  SurahInfo(29, "سورة العنكبوت", "مكية", 69, 396), SurahInfo(30, "سورة الروم", "مكية", 60, 404),
-                  SurahInfo(31, "سورة لقمان", "مكية", 34, 411), SurahInfo(32, "سورة السجدة", "مكية", 30, 415),
-                  SurahInfo(33, "سورة الأحزاب", "مدنية", 73, 418), SurahInfo(34, "سورة سبأ", "مكية", 54, 428),
-                  SurahInfo(35, "سورة فاطر", "مكية", 45, 434), SurahInfo(36, "سورة يس", "مكية", 83, 440),
-                  SurahInfo(37, "سورة الصافات", "مكية", 182, 446), SurahInfo(38, "سورة ص", "مكية", 88, 453),
-                  SurahInfo(39, "سورة الزمر", "مكية", 75, 458), SurahInfo(40, "سورة غافر", "مكية", 85, 467),
-                  SurahInfo(41, "سورة فصلت", "مكية", 54, 477), SurahInfo(42, "سورة الشورى", "مكية", 53, 483),
-                  SurahInfo(43, "سورة الزخرف", "مكية", 89, 489), SurahInfo(44, "سورة الدخان", "مكية", 59, 496),
-                  SurahInfo(45, "سورة الجاثية", "مكية", 37, 499), SurahInfo(46, "سورة الأحقاف", "مكية", 35, 502),
-                  SurahInfo(47, "سورة محمد", "مدنية", 38, 507), SurahInfo(48, "سورة الفتح", "مدنية", 29, 511),
-                  SurahInfo(49, "سورة الحجرات", "مدنية", 18, 515), SurahInfo(50, "سورة ق", "مكية", 45, 518),
-                  SurahInfo(51, "سورة الذاريات", "مكية", 60, 520), SurahInfo(52, "سورة الطور", "مكية", 49, 523),
-                  SurahInfo(53, "سورة النجم", "مكية", 62, 526), SurahInfo(54, "سورة القمر", "مكية", 55, 528),
-                  SurahInfo(55, "سورة الرحمن", "مدنية", 78, 531), SurahInfo(56, "سورة الواقعة", "مكية", 96, 534),
-                  SurahInfo(57, "سورة الحديد", "مدنية", 29, 537), SurahInfo(58, "سورة المجادلة", "مدنية", 22, 542),
-                  SurahInfo(59, "سورة الحشر", "مدنية", 24, 545), SurahInfo(60, "سورة الممتحنة", "مدنية", 13, 549),
-                  SurahInfo(61, "سورة الصف", "مدنية", 14, 551), SurahInfo(62, "سورة الجمعة", "مدنية", 11, 553),
-                  SurahInfo(63, "سورة المنافقون", "مدنية", 11, 554), SurahInfo(64, "سورة التغابن", "مدنية", 18, 556),
-                  SurahInfo(65, "سورة الطلاق", "مدنية", 12, 558), SurahInfo(66, "سورة التحريم", "مدنية", 12, 560),
-                  SurahInfo(67, "سورة الملك", "مكية", 30, 562), SurahInfo(68, "سورة القلم", "مكية", 52, 564),
-                  SurahInfo(69, "سورة الحاقة", "مكية", 52, 566), SurahInfo(70, "سورة المعارج", "مكية", 44, 568),
-                  SurahInfo(71, "سورة نوح", "مكية", 28, 570), SurahInfo(72, "سورة الجن", "مكية", 28, 572),
-                  SurahInfo(73, "سورة المزمل", "مكية", 20, 574), SurahInfo(74, "سورة المدثر", "مكية", 56, 575),
-                  SurahInfo(75, "سورة القيامة", "مكية", 40, 577), SurahInfo(76, "سورة الإنسان", "مدنية", 31, 578),
-                  SurahInfo(77, "سورة المرسلات", "مكية", 50, 580), SurahInfo(78, "سورة النبأ", "مكية", 40, 582),
-                  SurahInfo(79, "سورة النازعات", "مكية", 46, 583), SurahInfo(80, "سورة عبس", "مكية", 42, 585),
-                  SurahInfo(81, "سورة التكوير", "مكية", 29, 586), SurahInfo(82, "سورة الانفطار", "مكية", 19, 587),
-                  SurahInfo(83, "سورة المطففين", "مكية", 36, 587), SurahInfo(84, "سورة الانشقاق", "مكية", 25, 589),
-                  SurahInfo(85, "سورة البروج", "مكية", 22, 590), SurahInfo(86, "سورة الطارق", "مكية", 17, 591),
-                  SurahInfo(87, "سورة الأعلى", "مكية", 19, 591), SurahInfo(88, "سورة الغاشية", "مكية", 26, 592),
-                  SurahInfo(89, "سورة الفجر", "مكية", 30, 593), SurahInfo(90, "سورة البلد", "مكية", 20, 594),
-                  SurahInfo(91, "سورة الشمس", "مكية", 15, 595), SurahInfo(92, "سورة الليل", "مكية", 21, 595),
-                  SurahInfo(93, "سورة الضحى", "مكية", 11, 596), SurahInfo(94, "سورة الشرح", "مكية", 8, 596),
-                  SurahInfo(95, "سورة التين", "مكية", 8, 597), SurahInfo(96, "سورة العلق", "مكية", 19, 597),
-                  SurahInfo(97, "سورة القدر", "مكية", 5, 598), SurahInfo(98, "سورة البينة", "مدنية", 8, 598),
-                  SurahInfo(99, "سورة الزلزلة", "مدنية", 8, 599), SurahInfo(100, "سورة العاديات", "مكية", 11, 599),
-                  SurahInfo(101, "سورة القارعة", "مكية", 11, 600), SurahInfo(102, "سورة التكاثر", "مكية", 8, 600),
-                  SurahInfo(103, "سورة العصر", "مكية", 3, 601), SurahInfo(104, "سورة الهمزة", "مكية", 9, 601),
-                  SurahInfo(105, "سورة الفيل", "مكية", 5, 601), SurahInfo(106, "سورة قريش", "مكية", 4, 602),
-                  SurahInfo(107, "سورة الماعون", "مكية", 7, 602), SurahInfo(108, "سورة الكوثر", "مكية", 3, 602),
-                  SurahInfo(109, "سورة الكافرون", "مكية", 6, 603), SurahInfo(110, "سورة النصر", "مدنية", 3, 603),
-                  SurahInfo(111, "سورة المسد", "مكية", 5, 603), SurahInfo(112, "سورة الإخلاص", "مكية", 4, 604),
-                  SurahInfo(113, "سورة الفلق", "مكية", 5, 604), SurahInfo(114, "سورة الناس", "مكية", 6, 604)
-              )
-
-              fun getSurahNameByNumber(number: Int): String = surahs.find { it.number == number }?.name ?: "سورة الفاتحة"
-              fun getSurahByPage(page: Int): SurahInfo = surahs.lastOrNull { it.startPage <= page } ?: surahs.first()
-              fun getJuzByPage(page: Int): Int = ((page - 2) / 20 + 1).coerceIn(1, 30)
-
-              val hadiths = listOf(
-                  HadithItem(1, "إنما الأعمال بالنيات", "عَنْ عُمَرَ بْنِ الْخَطَّابِ رَضِيَ اللَّهُ عَنْهُ قَالَ: سَمِعْتُ رَسُولَ اللَّهِ ﷺ يَقُولُ: «إِنَّمَا الأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى».", "عمر بن الخطاب رضي الله عنه", "متفق عليه", "قبول الأعمال وثوابها عند الله مرتبط بإخلاص النية لوجهه الكريم."),
-                  HadithItem(2, "بني الإسلام على خمس", "قَالَ رَسُولُ اللَّهِ ﷺ: «بُنِيَ الإِسْلامُ عَلَى خَمْسٍ: شَهَادَةِ أَنْ لا إِلَهَ إِلا اللَّهُ وَأَنَّ مُحَمَّدًا رَسُولُ اللَّهِ، وَإِقَامِ الصَّلاةِ، وَإِيتَاءِ الزَّكَاةِ، وَحَجِّ الْبَيْتِ، وَصَوْمِ رَمَضَانَ».", "عبد الله بن عمر رضي الله عنهما", "متفق عليه", "يوضح الحديث أركان الإسلام الخمسة التي يقوم عليها دين المسلم."),
-                  HadithItem(3, "من حسن إسلام المرء", "قَالَ رَسُولُ اللَّهِ ﷺ: «مِنْ حُسْنِ إِسْلامِ الْمَرْءِ تَرْكُهُ مَا لا يَعْنِيهِ».", "أبو هريرة رضي الله عنه", "رواه الترمذي", "من علامات كمال إيمان المسلم انشغاله بما ينفعه في دينه ودنياه."),
-                  HadithItem(4, "لا يؤمن أحدكم حتى يحب لأخيه", "قَالَ النَّبِيُّ ﷺ: «لا يُؤْمِنُ أَحَدُكُمْ حَتَّى يُحِبَّ لأَخِيهِ مَا يُحِبُّ لِنَفْسِهِ».", "أنس بن مالك رضي الله عنه", "متفق عليه", "يربي الحديث قلب المؤمن على سلامة الصدر ومحبة الخير للمسلمين."),
-                  HadithItem(5, "فضل قراءة القرآن", "قَالَ رَسُولُ اللَّهِ ﷺ: «اقْرَءُوا الْقُرْآنَ فَإِنَّهُ يَأْتِي يَوْمَ الْقِيَامَةِ شَفِيعًا لأَصْحَابِهِ».", "أبو أمامة الباهلي رضي الله عنه", "رواه مسلم", "حثٌّ عظيم على ملازمة تلاوة القرآن الكريم وتدبره.")
-              )
-
-              val adhkarList = listOf(
-                  DhikrItem(1, "أذكار الصباح", "أَصْبَحْنَا وَأَصْبَحَ الْمُلْكُ لِلَّهِ، وَالْحَمْدُ لِلَّهِ، لاَ إِلَهَ إِلاَّ اللَّهُ وَحْدَهُ لاَ شَرِيكَ لَهُ.", 1, "بداية اليوم بالتوحيد وحمد الله."),
-                  DhikrItem(2, "أذكار الصباح", "بِسْمِ اللَّهِ الَّذِي لاَ يَضُرُّ مَعَ اسْمِهِ شَيْءٌ فِي الأَرْضِ وَلاَ فِي السَّمَاءِ وَهُوَ السَّمِيعُ الْعَلِيمُ.", 3, "من قالها ثلاثاً لم يضره شيء بإذن الله."),
-                  DhikrItem(3, "أذكار المساء", "أَمْسَيْنَا وَأَمْسَى الْمُلْكُ لِلَّهِ، وَالْحَمْدُ لِلَّهِ، لاَ إِلَهَ إِلاَّ اللَّهُ وَحْدَهُ لاَ شَرِيكَ لَهُ.", 1, "حفظ وتحصين للمسلم في مسائه."),
-                  DhikrItem(4, "أذكار المساء", "أَعُوذُ بِكَلِمَاتِ اللَّهِ التَّامَّاتِ مِنْ شَرِّ مَا خَلَقَ.", 3, "تحصين من كل شر وآفة في الليل."),
-                  DhikrItem(5, "أذكار بعد الصلاة", "أَسْتَغْفِرُ اللَّهَ (ثلاثاً) اللَّهُمَّ أَنْتَ السَّلاَمُ وَمِنْكَ السَّلاَمُ، تَبَارَكْتَ يَا ذَا الْجَلاَلِ وَالإِكْرَامِ.", 3, "سنة نبوية ثابتة عقب السلام من كل صلاة."),
-                  DhikrItem(6, "أذكار بعد الصلاة", "سُبْحَانَ اللَّهِ، وَالْحَمْدُ لِلَّهِ، وَاللَّهُ أَكْبَرُ.", 33, "غُفرت خطاياه وإن كانت مثل زبد البحر."),
-                  DhikrItem(7, "أذكار النوم", "بِاسْمِكَ اللَّهُمَّ أَمُوتُ وَأَحْيَا.", 1, "تفويض الأمر لله عند النوم.")
-              )
-          }
-          EOF
-
-          cat << 'EOF' > app/src/main/java/com/quran/app/Screens.kt
-          package com.quran.app
-
-          import android.content.Context
-          import android.content.Intent
-          import android.os.Build
-          import android.os.VibrationEffect
-          import android.os.Vibrator
-          import android.os.VibratorManager
-          import androidx.compose.animation.animateColorAsState
-          import androidx.compose.animation.core.animateFloatAsState
-          import androidx.compose.foundation.BorderStroke
-          import androidx.compose.foundation.background
-          import androidx.compose.foundation.border
-          import androidx.compose.foundation.clickable
-          import androidx.compose.foundation.gestures.detectTapGestures
-          import androidx.compose.foundation.layout.*
-          import androidx.compose.foundation.lazy.LazyColumn
-          import androidx.compose.foundation.lazy.LazyRow
-          import androidx.compose.foundation.lazy.items
-          import androidx.compose.foundation.pager.HorizontalPager
-          import androidx.compose.foundation.pager.rememberPagerState
-          import androidx.compose.foundation.shape.CircleShape
-          import androidx.compose.foundation.shape.RoundedCornerShape
-          import androidx.compose.material.icons.Icons
-          import androidx.compose.material.icons.automirrored.filled.ArrowBack
-          import androidx.compose.material.icons.automirrored.filled.MenuBook
-          import androidx.compose.material.icons.filled.*
-          import androidx.compose.material.icons.outlined.BookmarkBorder
-          import androidx.compose.material3.*
-          import androidx.compose.runtime.*
-          import androidx.compose.ui.Alignment
-          import androidx.compose.ui.Modifier
-          import androidx.compose.ui.draw.clip
-          import androidx.compose.ui.draw.shadow
-          import androidx.compose.ui.graphics.Brush
-          import androidx.compose.ui.graphics.Color
-          import androidx.compose.ui.graphics.ColorFilter
-          import androidx.compose.ui.graphics.ColorMatrix
-          import androidx.compose.ui.graphics.graphicsLayer
-          import androidx.compose.ui.graphics.vector.ImageVector
-          import androidx.compose.ui.input.pointer.pointerInput
-          import androidx.compose.ui.layout.ContentScale
-          import androidx.compose.ui.platform.LocalContext
-          import androidx.compose.ui.platform.LocalView
-          import androidx.compose.ui.text.font.FontWeight
-          import androidx.compose.ui.text.style.TextAlign
-          import androidx.compose.ui.text.style.TextOverflow
-          import androidx.compose.ui.unit.dp
-          import androidx.compose.ui.unit.sp
-          import coil.compose.SubcomposeAsyncImage
-          import coil.request.CachePolicy
-          import coil.request.ImageRequest
-          import kotlinx.coroutines.launch
-
-          val EmeraldDark = Color(0xFF063527)
-          val EmeraldPrimary = Color(0xFF0B4F3B)
-          val EmeraldLight = Color(0xFF146B52)
-          val GoldAccent = Color(0xFFD4AF37)
-          val GoldLight = Color(0xFFF3E2A9)
-          val IvoryBg = Color(0xFFFAF7F0)
-          val CardCream = Color(0xFFFFFFFF)
-          val TextDark = Color(0xFF162922)
-          val TextMuted = Color(0xFF5D726A)
-
-          sealed class AppRoute {
-              object Home : AppRoute()
-              object SurahIndex : AppRoute()
-              data class MushafPage(val initialPage: Int) : AppRoute()
-              object AudioSurahs : AppRoute()
-              data class AudioPlayer(val surahNumber: Int, val reciterId: String) : AppRoute()
-              object Hadith : AppRoute()
-              object AdhkarTasbih : AppRoute()
-              object Favorites : AppRoute()
-              object Settings : AppRoute()
-          }
-
-          @Composable
-          fun HomeScreen(onNavigate: (AppRoute) -> Unit) {
-              val context = LocalContext.current
-              val view = LocalView.current
-              val settings by AppPreferences.settings.collectAsState()
-              val audioState by QuranAudioService.playbackState.collectAsState()
-              val progressFraction = (settings.lastReadPage / 604f).coerceIn(0.02f, 1f)
-
-              LazyColumn(
-                  modifier = Modifier.fillMaxSize().background(IvoryBg),
-                  contentPadding = PaddingValues(bottom = 24.dp)
-              ) {
-                  item {
-                      Box(
-                          modifier = Modifier
-                              .fillMaxWidth()
-                              .background(
-                                  brush = Brush.verticalGradient(listOf(EmeraldDark, EmeraldPrimary)),
-                                  shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp)
-                              )
-                              .padding(horizontal = 20.dp, vertical = 18.dp)
-                      ) {
-                          Column {
-                              Row(
-                                  modifier = Modifier.fillMaxWidth(),
-                                  horizontalArrangement = Arrangement.SpaceBetween,
-                                  verticalAlignment = Alignment.CenterVertically
-                              ) {
-                                  IconButton(
-                                      onClick = { AppPreferences.playTouchSound(view); onNavigate(AppRoute.Settings) },
-                                      modifier = Modifier.size(42.dp).background(Color.White.copy(alpha = 0.12f), CircleShape)
-                                  ) {
-                                      Icon(Icons.Default.Tune, contentDescription = "الإعدادات", tint = GoldLight)
-                                  }
-
-                                  Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                      Text("القرآن الكريم", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                                      Text("مصحف المدينة المنورة والتلاوات", color = GoldLight.copy(alpha = 0.85f), fontSize = 12.sp)
-                                  }
-
-                                  IconButton(
-                                      onClick = { AppPreferences.playTouchSound(view); onNavigate(AppRoute.SurahIndex) },
-                                      modifier = Modifier.size(42.dp).background(Color.White.copy(alpha = 0.12f), CircleShape)
-                                  ) {
-                                      Icon(Icons.Default.Search, contentDescription = "بحث السور", tint = GoldLight)
-                                  }
-                              }
-
-                              Spacer(modifier = Modifier.height(16.dp))
-
-                              Card(
-                                  modifier = Modifier.fillMaxWidth(),
-                                  shape = RoundedCornerShape(20.dp),
-                                  colors = CardDefaults.cardColors(containerColor = EmeraldDark.copy(alpha = 0.72f)),
-                                  border = BorderStroke(1.5.dp, GoldAccent)
-                              ) {
-                                  Column(
-                                      modifier = Modifier.padding(16.dp),
-                                      horizontalAlignment = Alignment.CenterHorizontally
-                                  ) {
-                                      Surface(
-                                          color = GoldAccent.copy(alpha = 0.2f),
-                                          shape = RoundedCornerShape(50),
-                                          border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.5f))
-                                      ) {
-                                          Text(
-                                              text = "✦ آية اليوم ✦",
-                                              color = GoldLight,
-                                              fontSize = 12.sp,
-                                              fontWeight = FontWeight.Bold,
-                                              modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
-                                          )
-                                      }
-                                      Spacer(modifier = Modifier.height(10.dp))
-                                      Text(
-                                          text = "﴿ إِنَّ هَٰذَا الْقُرْآنَ يَهْدِي لِلَّتِي هِيَ أَقْوَمُ ﴾",
-                                          color = Color.White,
-                                          fontSize = 20.sp,
-                                          fontWeight = FontWeight.Bold,
-                                          textAlign = TextAlign.Center,
-                                          lineHeight = 32.sp
-                                      )
-                                      Spacer(modifier = Modifier.height(8.dp))
-                                      Row(
-                                          modifier = Modifier.fillMaxWidth(),
-                                          horizontalArrangement = Arrangement.SpaceBetween,
-                                          verticalAlignment = Alignment.CenterVertically
-                                      ) {
-                                          Text("سورة الإسراء • الآية ٩", color = GoldLight, fontSize = 12.sp)
-                                          IconButton(
-                                              onClick = {
-                                                  AppPreferences.playTouchSound(view)
-                                                  shareText(context, "﴿ إِنَّ هَٰذَا الْقُرْآنَ يَهْدِي لِلَّتِي هِيَ أَقْوَمُ ﴾ [سورة الإسراء: 9]")
-                                              },
-                                              modifier = Modifier.size(34.dp).background(GoldAccent, CircleShape)
-                                          ) {
-                                              Icon(Icons.Default.Share, contentDescription = "مشاركة", tint = EmeraldDark, modifier = Modifier.size(18.dp))
-                                          }
-                                      }
-                                  }
-                              }
-                          }
-                      }
-                  }
-
-                  item {
-                      Spacer(modifier = Modifier.height(16.dp))
-                      Card(
-                          modifier = Modifier
-                              .fillMaxWidth()
-                              .padding(horizontal = 16.dp)
-                              .clickable { AppPreferences.playTouchSound(view); onNavigate(AppRoute.MushafPage(settings.lastReadPage)) },
-                          shape = RoundedCornerShape(20.dp),
-                          colors = CardDefaults.cardColors(containerColor = EmeraldPrimary),
-                          elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                      ) {
-                          Row(
-                              modifier = Modifier.fillMaxWidth().padding(16.dp),
-                              verticalAlignment = Alignment.CenterVertically,
-                              horizontalArrangement = Arrangement.SpaceBetween
-                          ) {
-                              Column(modifier = Modifier.weight(1f)) {
-                                  Text("متابعة القراءة", color = GoldLight, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                  Spacer(modifier = Modifier.height(4.dp))
-                                  Text(settings.lastReadSurahName, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                                  Text(
-                                      text = "صفحة ${settings.lastReadPage} من ٦٠٤ • الجزء ${QuranRepository.getJuzByPage(settings.lastReadPage)}",
-                                      color = Color.White.copy(alpha = 0.85f),
-                                      fontSize = 12.sp
-                                  )
-                                  Spacer(modifier = Modifier.height(10.dp))
-                                  LinearProgressIndicator(
-                                      progress = { progressFraction },
-                                      modifier = Modifier.fillMaxWidth(0.85f).height(6.dp).clip(CircleShape),
-                                      color = GoldAccent,
-                                      trackColor = Color.White.copy(alpha = 0.2f)
-                                  )
-                              }
-                              Button(
-                                  onClick = { AppPreferences.playTouchSound(view); onNavigate(AppRoute.MushafPage(settings.lastReadPage)) },
-                                  colors = ButtonDefaults.buttonColors(containerColor = GoldAccent, contentColor = EmeraldDark),
-                                  shape = RoundedCornerShape(14.dp)
-                              ) {
-                                  Text("متابعة", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                              }
-                          }
-                      }
-                  }
-
-                  if (audioState.isPrepared) {
+          python3 -c '
+          p = "app/src/main/java/com/quran/app/Screens.kt"
+          txt = open(p, encoding="utf-8").read()
+          if "fun formatMillis" not in txt:
+              idx = txt.rfind("item {")
+              if idx != -1:
+                  txt = txt[:idx]
+              tail = """
                       item {
-                          Spacer(modifier = Modifier.height(12.dp))
-                          Card(
-                              modifier = Modifier
-                                  .fillMaxWidth()
-                                  .padding(horizontal = 16.dp)
-                                  .clickable { AppPreferences.playTouchSound(view); onNavigate(AppRoute.AudioPlayer(audioState.surahNumber, audioState.reciterId)) },
-                              shape = RoundedCornerShape(16.dp),
-                              colors = CardDefaults.cardColors(containerColor = CardCream),
-                              border = BorderStroke(1.5.dp, GoldAccent)
-                          ) {
-                              Row(
-                                  modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
-                                  verticalAlignment = Alignment.CenterVertically,
-                                  horizontalArrangement = Arrangement.SpaceBetween
-                              ) {
-                                  Row(verticalAlignment = Alignment.CenterVertically) {
-                                      Box(
-                                          modifier = Modifier.size(40.dp).background(EmeraldPrimary, CircleShape),
-                                          contentAlignment = Alignment.Center
-                                      ) {
-                                          Icon(Icons.Default.GraphicEq, contentDescription = null, tint = GoldAccent)
-                                      }
-                                      Spacer(modifier = Modifier.width(10.dp))
-                                      Column {
-                                          Text("جاري التلاوة: ${audioState.surahName}", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextDark)
-                                          Text(audioState.reciterName, fontSize = 12.sp, color = TextMuted)
-                                      }
+                          Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = CardCream), border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.4f))) {
+                              Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                  Column {
+                                      Text("القرآن الكريم - الإصدار الاحترافي", fontWeight = FontWeight.Bold, color = TextDark)
+                                      Text("مصحف المدينة المنورة • تلاوات وأحاديث وأذكار", fontSize = 12.sp, color = TextMuted)
                                   }
-                                  IconButton(
-                                      onClick = {
-                                          AppPreferences.playTouchSound(view)
-                                          QuranAudioService.sendCommand(context, QuranAudioService.ACTION_TOGGLE_PLAY)
-                                      },
-                                      modifier = Modifier.size(40.dp).background(GoldAccent, CircleShape)
-                                  ) {
-                                      Icon(if (audioState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = "تشغيل", tint = EmeraldDark)
+                                  Surface(color = EmeraldPrimary, shape = RoundedCornerShape(10.dp)) {
+                                      Text("v3.0", color = GoldLight, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                                   }
-                              }
-                          }
-                      }
-                  }
-
-                  item {
-                      Spacer(modifier = Modifier.height(18.dp))
-                      Text("أقسام التطبيق", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextDark, modifier = Modifier.padding(horizontal = 20.dp))
-                      Spacer(modifier = Modifier.height(10.dp))
-                      Column(modifier = Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                              HomeSectionCard("القرآن الكريم", "صفحات المصحف الشريف", Icons.AutoMirrored.Filled.MenuBook, Modifier.weight(1f)) {
-                                  AppPreferences.playTouchSound(view); onNavigate(AppRoute.SurahIndex)
-                              }
-                              HomeSectionCard("المشغل الصوتي", "تلاوات بدون إنترنت", Icons.Default.Headphones, Modifier.weight(1f)) {
-                                  AppPreferences.playTouchSound(view); onNavigate(AppRoute.AudioSurahs)
-                              }
-                          }
-                          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                              HomeSectionCard("الأحاديث النبوية", "الأربعون النووية وشرحها", Icons.Default.FormatQuote, Modifier.weight(1f)) {
-                                  AppPreferences.playTouchSound(view); onNavigate(AppRoute.Hadith)
-                              }
-                              HomeSectionCard("الأذكار والمسبحة", "حصن المسلم والتسبيح", Icons.Default.TouchApp, Modifier.weight(1f)) {
-                                  AppPreferences.playTouchSound(view); onNavigate(AppRoute.AdhkarTasbih)
-                              }
-                          }
-                          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                              HomeSectionCard("الصفحات المحفوظة", "علامات التلاوة والمفضلة", Icons.Default.Bookmark, Modifier.weight(1f)) {
-                                  AppPreferences.playTouchSound(view); onNavigate(AppRoute.Favorites)
-                              }
-                              HomeSectionCard("الإعدادات", "الصوت والخط والمظهر", Icons.Default.Settings, Modifier.weight(1f)) {
-                                  AppPreferences.playTouchSound(view); onNavigate(AppRoute.Settings)
                               }
                           }
                       }
@@ -597,10 +52,73 @@ jobs:
           }
 
           @Composable
-          fun HomeSectionCard(title: String, subtitle: String, icon: ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
-              Card(
-                  modifier = modifier.height(132.dp).clickable { onClick() },
-                  shape = RoundedCornerShape(20.dp),
-                  colors = CardDefaults.cardColors(containerColor = CardCream),
-                  border = BorderStroke(1.2.dp, GoldAccent.copy(alpha = 0.55f)),
-                  
+          private fun SettingSwitchRow(title: String, subtitle: String, icon: ImageVector, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+              Row(
+                  modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }.padding(horizontal = 16.dp, vertical = 14.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                  Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                      Box(modifier = Modifier.size(40.dp).background(IvoryBg, CircleShape), contentAlignment = Alignment.Center) {
+                          Icon(icon, contentDescription = null, tint = EmeraldPrimary)
+                      }
+                      Spacer(modifier = Modifier.width(12.dp))
+                      Column {
+                          Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextDark)
+                          Text(subtitle, fontSize = 12.sp, color = TextMuted)
+                      }
+                  }
+                  Switch(checked = checked, onCheckedChange = onCheckedChange, colors = SwitchDefaults.colors(checkedThumbColor = GoldLight, checkedTrackColor = EmeraldPrimary))
+              }
+          }
+
+          private fun formatMillis(ms: Long): String {
+              val totalSeconds = (ms / 1000L).coerceAtLeast(0L)
+              val hours = totalSeconds / 3600
+              val minutes = (totalSeconds % 3600) / 60
+              val seconds = totalSeconds % 60
+              return if (hours > 0) String.format("%d:%02d:%02d", hours, minutes, seconds) else String.format("%02d:%02d", minutes, seconds)
+          }
+
+          private fun shareText(context: Context, text: String) {
+              val intent = Intent(Intent.ACTION_SEND).apply {
+                  type = "text/plain"
+                  putExtra(Intent.EXTRA_TEXT, text)
+              }
+              context.startActivity(Intent.createChooser(intent, "مشاركة عبر"))
+          }
+
+          private fun triggerVibration(context: Context, durationMs: Long) {
+              try {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                      val manager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                      manager.defaultVibrator.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
+                  } else {
+                      @Suppress("DEPRECATION")
+                      val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          vibrator.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
+                      } else {
+                          @Suppress("DEPRECATION")
+                          vibrator.vibrate(durationMs)
+                      }
+                  }
+              } catch (_: Exception) { }
+          }
+          """
+              open(p, "w", encoding="utf-8").write(txt + tail)
+          '
+
+      - name: Generate Persistent Keystore
+        run: |
+          mkdir -p app
+          keytool -genkeypair -v -keystore app/release.jks -alias quran_key -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=QuranApp, OU=Dev, O=Quran, L=Aleppo, S=Syria, C=SY"
+
+      - name: Build Debug APK
+        run: gradle assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuranApp-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
