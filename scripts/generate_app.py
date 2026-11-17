@@ -416,12 +416,3 @@ fun SettingTile(title: String, checked: Boolean, onToggle: (Boolean) -> Unit) {
 
 with open(f"{base}/MainActivity.kt", "w", encoding="utf-8") as f:
     f.write(code.strip() + "\n")
-print("Clean MainActivity.kt generated successfully!")
-'''
-
----
-
-### لماذا هذه الطريقة مضمونة 100%؟
-* تمسح كل الملفات المعطوبة القديمة قبل البدء بـ `rm -rf`.
-* تضع كل كود التطبيق في ملف واحد نظيف (`MainActivity.kt`) دون أي تداخل بين الملفات أو دوال ناقصة.
-* سيعمل البناء وتظهر لك حزمة **`QuranApp-APK`** في تبويب **`Actions`** بعد دقيقتين من حفظ الملف الثاني.
