@@ -292,16 +292,315 @@ jobs:
           }
           EOF
 
-      - name: Generate Persistent Keystore
-        run: |
-          mkdir -p app
-          keytool -genkeypair -v -keystore app/release.jks -alias quran_key -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=QuranApp, OU=Dev, O=Quran, L=Aleppo, S=Syria, C=SY"
+          cat << 'EOF' > app/src/main/java/com/quran/app/Screens.kt
+          package com.quran.app
 
-      - name: Build Debug APK
-        run: gradle assembleDebug
+          import android.content.Context
+          import android.content.Intent
+          import android.os.Build
+          import android.os.VibrationEffect
+          import android.os.Vibrator
+          import android.os.VibratorManager
+          import androidx.compose.animation.animateColorAsState
+          import androidx.compose.animation.core.animateFloatAsState
+          import androidx.compose.foundation.BorderStroke
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.border
+          import androidx.compose.foundation.clickable
+          import androidx.compose.foundation.gestures.detectTapGestures
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.lazy.LazyColumn
+          import androidx.compose.foundation.lazy.LazyRow
+          import androidx.compose.foundation.lazy.items
+          import androidx.compose.foundation.pager.HorizontalPager
+          import androidx.compose.foundation.pager.rememberPagerState
+          import androidx.compose.foundation.shape.CircleShape
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.material.icons.Icons
+          import androidx.compose.material.icons.automirrored.filled.ArrowBack
+          import androidx.compose.material.icons.automirrored.filled.MenuBook
+          import androidx.compose.material.icons.filled.*
+          import androidx.compose.material.icons.outlined.BookmarkBorder
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.draw.clip
+          import androidx.compose.ui.draw.shadow
+          import androidx.compose.ui.graphics.Brush
+          import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.graphics.ColorFilter
+          import androidx.compose.ui.graphics.ColorMatrix
+          import androidx.compose.ui.graphics.graphicsLayer
+          import androidx.compose.ui.graphics.vector.ImageVector
+          import androidx.compose.ui.input.pointer.pointerInput
+          import androidx.compose.ui.layout.ContentScale
+          import androidx.compose.ui.platform.LocalContext
+          import androidx.compose.ui.platform.LocalView
+          import androidx.compose.ui.text.font.FontWeight
+          import androidx.compose.ui.text.style.TextAlign
+          import androidx.compose.ui.text.style.TextOverflow
+          import androidx.compose.ui.unit.dp
+          import androidx.compose.ui.unit.sp
+          import coil.compose.SubcomposeAsyncImage
+          import coil.request.CachePolicy
+          import coil.request.ImageRequest
+          import kotlinx.coroutines.launch
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: QuranApp-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          val EmeraldDark = Color(0xFF063527)
+          val EmeraldPrimary = Color(0xFF0B4F3B)
+          val EmeraldLight = Color(0xFF146B52)
+          val GoldAccent = Color(0xFFD4AF37)
+          val GoldLight = Color(0xFFF3E2A9)
+          val IvoryBg = Color(0xFFFAF7F0)
+          val CardCream = Color(0xFFFFFFFF)
+          val TextDark = Color(0xFF162922)
+          val TextMuted = Color(0xFF5D726A)
+
+          sealed class AppRoute {
+              object Home : AppRoute()
+              object SurahIndex : AppRoute()
+              data class MushafPage(val initialPage: Int) : AppRoute()
+              object AudioSurahs : AppRoute()
+              data class AudioPlayer(val surahNumber: Int, val reciterId: String) : AppRoute()
+              object Hadith : AppRoute()
+              object AdhkarTasbih : AppRoute()
+              object Favorites : AppRoute()
+              object Settings : AppRoute()
+          }
+
+          @Composable
+          fun HomeScreen(onNavigate: (AppRoute) -> Unit) {
+              val context = LocalContext.current
+              val view = LocalView.current
+              val settings by AppPreferences.settings.collectAsState()
+              val audioState by QuranAudioService.playbackState.collectAsState()
+              val progressFraction = (settings.lastReadPage / 604f).coerceIn(0.02f, 1f)
+
+              LazyColumn(
+                  modifier = Modifier.fillMaxSize().background(IvoryBg),
+                  contentPadding = PaddingValues(bottom = 24.dp)
+              ) {
+                  item {
+                      Box(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .background(
+                                  brush = Brush.verticalGradient(listOf(EmeraldDark, EmeraldPrimary)),
+                                  shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp)
+                              )
+                              .padding(horizontal = 20.dp, vertical = 18.dp)
+                      ) {
+                          Column {
+                              Row(
+                                  modifier = Modifier.fillMaxWidth(),
+                                  horizontalArrangement = Arrangement.SpaceBetween,
+                                  verticalAlignment = Alignment.CenterVertically
+                              ) {
+                                  IconButton(
+                                      onClick = { AppPreferences.playTouchSound(view); onNavigate(AppRoute.Settings) },
+                                      modifier = Modifier.size(42.dp).background(Color.White.copy(alpha = 0.12f), CircleShape)
+                                  ) {
+                                      Icon(Icons.Default.Tune, contentDescription = "الإعدادات", tint = GoldLight)
+                                  }
+
+                                  Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                      Text("القرآن الكريم", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                                      Text("مصحف المدينة المنورة والتلاوات", color = GoldLight.copy(alpha = 0.85f), fontSize = 12.sp)
+                                  }
+
+                                  IconButton(
+                                      onClick = { AppPreferences.playTouchSound(view); onNavigate(AppRoute.SurahIndex) },
+                                      modifier = Modifier.size(42.dp).background(Color.White.copy(alpha = 0.12f), CircleShape)
+                                  ) {
+                                      Icon(Icons.Default.Search, contentDescription = "بحث السور", tint = GoldLight)
+                                  }
+                              }
+
+                              Spacer(modifier = Modifier.height(16.dp))
+
+                              Card(
+                                  modifier = Modifier.fillMaxWidth(),
+                                  shape = RoundedCornerShape(20.dp),
+                                  colors = CardDefaults.cardColors(containerColor = EmeraldDark.copy(alpha = 0.72f)),
+                                  border = BorderStroke(1.5.dp, GoldAccent)
+                              ) {
+                                  Column(
+                                      modifier = Modifier.padding(16.dp),
+                                      horizontalAlignment = Alignment.CenterHorizontally
+                                  ) {
+                                      Surface(
+                                          color = GoldAccent.copy(alpha = 0.2f),
+                                          shape = RoundedCornerShape(50),
+                                          border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.5f))
+                                      ) {
+                                          Text(
+                                              text = "✦ آية اليوم ✦",
+                                              color = GoldLight,
+                                              fontSize = 12.sp,
+                                              fontWeight = FontWeight.Bold,
+                                              modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                                          )
+                                      }
+                                      Spacer(modifier = Modifier.height(10.dp))
+                                      Text(
+                                          text = "﴿ إِنَّ هَٰذَا الْقُرْآنَ يَهْدِي لِلَّتِي هِيَ أَقْوَمُ ﴾",
+                                          color = Color.White,
+                                          fontSize = 20.sp,
+                                          fontWeight = FontWeight.Bold,
+                                          textAlign = TextAlign.Center,
+                                          lineHeight = 32.sp
+                                      )
+                                      Spacer(modifier = Modifier.height(8.dp))
+                                      Row(
+                                          modifier = Modifier.fillMaxWidth(),
+                                          horizontalArrangement = Arrangement.SpaceBetween,
+                                          verticalAlignment = Alignment.CenterVertically
+                                      ) {
+                                          Text("سورة الإسراء • الآية ٩", color = GoldLight, fontSize = 12.sp)
+                                          IconButton(
+                                              onClick = {
+                                                  AppPreferences.playTouchSound(view)
+                                                  shareText(context, "﴿ إِنَّ هَٰذَا الْقُرْآنَ يَهْدِي لِلَّتِي هِيَ أَقْوَمُ ﴾ [سورة الإسراء: 9]")
+                                              },
+                                              modifier = Modifier.size(34.dp).background(GoldAccent, CircleShape)
+                                          ) {
+                                              Icon(Icons.Default.Share, contentDescription = "مشاركة", tint = EmeraldDark, modifier = Modifier.size(18.dp))
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  }
+
+                  item {
+                      Spacer(modifier = Modifier.height(16.dp))
+                      Card(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .padding(horizontal = 16.dp)
+                              .clickable { AppPreferences.playTouchSound(view); onNavigate(AppRoute.MushafPage(settings.lastReadPage)) },
+                          shape = RoundedCornerShape(20.dp),
+                          colors = CardDefaults.cardColors(containerColor = EmeraldPrimary),
+                          elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                      ) {
+                          Row(
+                              modifier = Modifier.fillMaxWidth().padding(16.dp),
+                              verticalAlignment = Alignment.CenterVertically,
+                              horizontalArrangement = Arrangement.SpaceBetween
+                          ) {
+                              Column(modifier = Modifier.weight(1f)) {
+                                  Text("متابعة القراءة", color = GoldLight, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                  Spacer(modifier = Modifier.height(4.dp))
+                                  Text(settings.lastReadSurahName, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                                  Text(
+                                      text = "صفحة ${settings.lastReadPage} من ٦٠٤ • الجزء ${QuranRepository.getJuzByPage(settings.lastReadPage)}",
+                                      color = Color.White.copy(alpha = 0.85f),
+                                      fontSize = 12.sp
+                                  )
+                                  Spacer(modifier = Modifier.height(10.dp))
+                                  LinearProgressIndicator(
+                                      progress = { progressFraction },
+                                      modifier = Modifier.fillMaxWidth(0.85f).height(6.dp).clip(CircleShape),
+                                      color = GoldAccent,
+                                      trackColor = Color.White.copy(alpha = 0.2f)
+                                  )
+                              }
+                              Button(
+                                  onClick = { AppPreferences.playTouchSound(view); onNavigate(AppRoute.MushafPage(settings.lastReadPage)) },
+                                  colors = ButtonDefaults.buttonColors(containerColor = GoldAccent, contentColor = EmeraldDark),
+                                  shape = RoundedCornerShape(14.dp)
+                              ) {
+                                  Text("متابعة", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                              }
+                          }
+                      }
+                  }
+
+                  if (audioState.isPrepared) {
+                      item {
+                          Spacer(modifier = Modifier.height(12.dp))
+                          Card(
+                              modifier = Modifier
+                                  .fillMaxWidth()
+                                  .padding(horizontal = 16.dp)
+                                  .clickable { AppPreferences.playTouchSound(view); onNavigate(AppRoute.AudioPlayer(audioState.surahNumber, audioState.reciterId)) },
+                              shape = RoundedCornerShape(16.dp),
+                              colors = CardDefaults.cardColors(containerColor = CardCream),
+                              border = BorderStroke(1.5.dp, GoldAccent)
+                          ) {
+                              Row(
+                                  modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                                  verticalAlignment = Alignment.CenterVertically,
+                                  horizontalArrangement = Arrangement.SpaceBetween
+                              ) {
+                                  Row(verticalAlignment = Alignment.CenterVertically) {
+                                      Box(
+                                          modifier = Modifier.size(40.dp).background(EmeraldPrimary, CircleShape),
+                                          contentAlignment = Alignment.Center
+                                      ) {
+                                          Icon(Icons.Default.GraphicEq, contentDescription = null, tint = GoldAccent)
+                                      }
+                                      Spacer(modifier = Modifier.width(10.dp))
+                                      Column {
+                                          Text("جاري التلاوة: ${audioState.surahName}", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextDark)
+                                          Text(audioState.reciterName, fontSize = 12.sp, color = TextMuted)
+                                      }
+                                  }
+                                  IconButton(
+                                      onClick = {
+                                          AppPreferences.playTouchSound(view)
+                                          QuranAudioService.sendCommand(context, QuranAudioService.ACTION_TOGGLE_PLAY)
+                                      },
+                                      modifier = Modifier.size(40.dp).background(GoldAccent, CircleShape)
+                                  ) {
+                                      Icon(if (audioState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = "تشغيل", tint = EmeraldDark)
+                                  }
+                              }
+                          }
+                      }
+                  }
+
+                  item {
+                      Spacer(modifier = Modifier.height(18.dp))
+                      Text("أقسام التطبيق", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextDark, modifier = Modifier.padding(horizontal = 20.dp))
+                      Spacer(modifier = Modifier.height(10.dp))
+                      Column(modifier = Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                              HomeSectionCard("القرآن الكريم", "صفحات المصحف الشريف", Icons.AutoMirrored.Filled.MenuBook, Modifier.weight(1f)) {
+                                  AppPreferences.playTouchSound(view); onNavigate(AppRoute.SurahIndex)
+                              }
+                              HomeSectionCard("المشغل الصوتي", "تلاوات بدون إنترنت", Icons.Default.Headphones, Modifier.weight(1f)) {
+                                  AppPreferences.playTouchSound(view); onNavigate(AppRoute.AudioSurahs)
+                              }
+                          }
+                          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                              HomeSectionCard("الأحاديث النبوية", "الأربعون النووية وشرحها", Icons.Default.FormatQuote, Modifier.weight(1f)) {
+                                  AppPreferences.playTouchSound(view); onNavigate(AppRoute.Hadith)
+                              }
+                              HomeSectionCard("الأذكار والمسبحة", "حصن المسلم والتسبيح", Icons.Default.TouchApp, Modifier.weight(1f)) {
+                                  AppPreferences.playTouchSound(view); onNavigate(AppRoute.AdhkarTasbih)
+                              }
+                          }
+                          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                              HomeSectionCard("الصفحات المحفوظة", "علامات التلاوة والمفضلة", Icons.Default.Bookmark, Modifier.weight(1f)) {
+                                  AppPreferences.playTouchSound(view); onNavigate(AppRoute.Favorites)
+                              }
+                              HomeSectionCard("الإعدادات", "الصوت والخط والمظهر", Icons.Default.Settings, Modifier.weight(1f)) {
+                                  AppPreferences.playTouchSound(view); onNavigate(AppRoute.Settings)
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+
+          @Composable
+          fun HomeSectionCard(title: String, subtitle: String, icon: ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
+              Card(
+                  modifier = modifier.height(132.dp).clickable { onClick() },
+                  shape = RoundedCornerShape(20.dp),
+                  colors = CardDefaults.cardColors(containerColor = CardCream),
+                  border = BorderStroke(1.2.dp, GoldAccent.copy(alpha = 0.55f)),
+                  
