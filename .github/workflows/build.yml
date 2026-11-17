@@ -24,6 +24,11 @@ jobs:
         with:
           gradle-version: '8.7'
 
+      - name: Generate Keystore
+        run: |
+          mkdir -p app
+          keytool -genkeypair -v -keystore app/release.jks -alias quran_key -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=QuranApp, OU=Dev, O=Quran, L=Aleppo, S=Syria, C=SY"
+
       - name: Build Debug APK
         run: gradle assembleDebug
 
