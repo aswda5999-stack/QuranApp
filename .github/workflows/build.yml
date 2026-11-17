@@ -24,15 +24,19 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Repair Screens.kt Truncation & Duplicates
+      - name: Repair AppData.kt & Screens.kt
         run: |
           python3 - << 'PY'
+          for name in ["AppData.kt", "Screens.kt"]:
+              p = f"app/src/main/java/com/quran/app/{name}"
+              txt = open(p, encoding="utf-8").read()
+              last_pkg = txt.rfind("package com.quran.app")
+              if last_pkg > 0:
+                  txt = txt[last_pkg:]
+              open(p, "w", encoding="utf-8").write(txt)
+
           p = "app/src/main/java/com/quran/app/Screens.kt"
           txt = open(p, encoding="utf-8").read()
-          first_pkg = txt.find("package com.quran.app")
-          second_pkg = txt.find("package com.quran.app", first_pkg + 10)
-          if second_pkg != -1:
-              txt = txt[second_pkg:]
           cut = txt.rfind("fun SettingsScreen")
           if cut != -1:
               txt = txt[:cut] + """fun SettingsScreen(onBack: () -> Unit) {
@@ -79,7 +83,7 @@ jobs:
               } catch (_: Exception) { }
           }
           """
-          open(p, "w", encoding="utf-8").write(txt)
+              open(p, "w", encoding="utf-8").write(txt)
           PY
 
       - name: Generate Persistent Keystore
