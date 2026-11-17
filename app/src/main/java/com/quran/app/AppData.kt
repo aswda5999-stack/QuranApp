@@ -152,7 +152,7 @@ object AudioDownloadManager {
     private val _downloadProgress = MutableStateFlow>(emptyMap())
     val downloadProgress: StateFlow> = _downloadProgress.asStateFlow()
 
-    private fun key(reciterId: String, surahNumber: Int) = "${reciterId}_$surahNumber"
+    private fun key(reciterId: String, surahNumber: Int): String = "${reciterId}_$surahNumber"
 
     fun getLocalAudioFile(context: Context, reciterId: String, surahNumber: Int): File {
         val dir = File(context.filesDir, "quran_audio/$reciterId")
@@ -209,7 +209,7 @@ object AudioDownloadManager {
                         output.write(buffer, 0, read)
                         bytesCopied += read
                         val percent = if (totalBytes > 0L) {
-                            ((bytesCopied * 100) / totalBytes).toInt().coerceIn(1, 99)
+                            ((bytesCopied * 100L) / totalBytes).toInt().coerceIn(1, 99)
                         } else {
                             50
                         }
@@ -243,7 +243,6 @@ object QuranRepository {
 
     const val TOTAL_MUSHAF_PAGES = 604
 
-    // رابط صفحات مصحف المدينة المنورة المصورة عالية الدقة (604 صفحات)
     fun getMushafPageImageUrl(pageNumber: Int): String {
         val safePage = pageNumber.coerceIn(1, TOTAL_MUSHAF_PAGES)
         val padded = safePage.toString().padStart(3, '0')
@@ -445,7 +444,7 @@ object QuranRepository {
         HadithItem(
             id = 4,
             title = "لا يؤمن أحدكم حتى يحب لأخيه",
-            text = "عَنْ أَبِي حَمْزَةَ أَنَسِ بْنِ مَالِكٍ رَضِيَ اللَّهُ عَنْهُ خَادِمِ رَسُولِ اللَّهِ ﷺ عَنِ النَّبِيِّ ﷺ قَالَ: «لا يُؤْمِنُ أَحَدُكُمْ حَتَّى يُحِبَّ لأَخِيهِ مَا يُحِبُّ لِنَفْسِهِ».",
+            text = "عَنْ أَبِي حَمْزَةَ أَنَسِ بْنِ مَالِكٍ رَضِيَ اللَّهُ عَنْهُ خَادِمِ رَسُولِ اللَّهِ ﷺ عَنِ النَّبِيِّ ﷺ قَالَ: «لا يُؤْمِنُ أَحَدُكُمْ حَتَّى يُحِبَّ لأَخِيهِ مَا يُحِبَّ لِنَفْسِهِ».",
             narrator = "أنس بن مالك رضي الله عنه",
             source = "متفق عليه (البخاري ومسلم)",
             explanation = "يربي الحديث قلب المؤمن على سلامة الصدر ونقاء السريرة ومحبة الخير لجميع المسلمين."
