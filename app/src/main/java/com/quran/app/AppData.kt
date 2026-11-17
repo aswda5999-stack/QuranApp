@@ -1,387 +1,559 @@
 package com.quran.app
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import android.graphics.Typeface
-import android.os.Build
-import androidx.compose.ui.text.font.FontFamily
-import androidx.core.app.NotificationCompat
+import android.view.SoundEffectConstants
+import android.view.View
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
+import java.net.HttpURLConnection
 import java.net.URL
 
 data class SurahInfo(
     val number: Int,
     val name: String,
-    val englishName: String,
-    val numberOfAyahs: Int,
-    val revelationType: String
-)
-
-data class AyahItem(
-    val number: Int,
-    val numberInSurah: Int,
-    val text: String,
-    val tafsir: String,
-    val juz: Int,
-    val page: Int
-)
-
-data class BookmarkItem(
-    val surahNumber: Int,
-    val surahName: String,
-    val ayahNumber: Int,
-    val ayahText: String
-)
-
-data class GuideItem(
-    val title: String,
-    val subtitle: String,
-    val count: Int = 1
+    val type: String,
+    val ayahCount: Int,
+    val startPage: Int
 )
 
 data class ReciterInfo(
     val id: String,
     val name: String,
-    val serverUrl: String
+    val style: String,
+    val audioBaseUrl: String,
+    val imageUrl: String
 )
 
-data class AppSettings(
-    val fontSize: Float = 26f,
-    val useUthmanicFont: Boolean = true,
-    val isBoldFont: Boolean = false,
-    val lineSpacing: Float = 1.75f,
-    val isMushafMode: Boolean = false,
-    val showAyahMarkers: Boolean = true,
-    val isDarkMode: Boolean = false,
-    val themeIndex: Int = 0, // 0..5
-    val cardCornerRadius: Float = 20f,
-    val defaultReciterId: String = "afs",
+data class HadithItem(
+    val id: Int,
+    val title: String,
+    val text: String,
+    val narrator: String,
+    val source: String,
+    val explanation: String
+)
+
+data class DhikrItem(
+    val id: Int,
+    val category: String,
+    val text: String,
+    val targetCount: Int,
+    val reward: String
+)
+
+data class AppSettingsState(
+    val touchSoundEnabled: Boolean = true,
+    val vibrationEnabled: Boolean = true,
+    val nightMushafMode: Boolean = false,
     val keepScreenOn: Boolean = true,
-    val showNavLabels: Boolean = true,
-    val isGridView: Boolean = false,
-    val vibrateOnTasbih: Boolean = true,
-    val notificationsEnabled: Boolean = true,
-    val lastSurahNumber: Int = 1,
-    val lastSurahName: String = "سُورَةُ ٱلْفَاتِحَةِ",
-    val tasbihCount: Int = 0,
-    val totalReadAyahs: Int = 0
+    val lastReadPage: Int = 1,
+    val lastReadSurahName: String = "سورة الفاتحة",
+    val selectedReciterId: String = "afs",
+    val totalTasbihCount: Int = 0
 )
 
-class SettingsManager(context: Context) {
-    private val prefs = context.getSharedPreferences("quran_v2_prefs", Context.MODE_PRIVATE)
+object AppPreferences {
+    private const val PREFS_NAME = "quran_app_v3_prefs"
 
-    fun loadSettings(): AppSettings = AppSettings(
-        fontSize = prefs.getFloat("fontSize", 26f),
-        useUthmanicFont = prefs.getBoolean("useUthmanicFont", true),
-        isBoldFont = prefs.getBoolean("isBoldFont", false),
-        lineSpacing = prefs.getFloat("lineSpacing", 1.75f),
-        isMushafMode = prefs.getBoolean("isMushafMode", false),
-        showAyahMarkers = prefs.getBoolean("showAyahMarkers", true),
-        isDarkMode = prefs.getBoolean("isDarkMode", false),
-        themeIndex = prefs.getInt("themeIndex", 0),
-        cardCornerRadius = prefs.getFloat("cardCornerRadius", 20f),
-        defaultReciterId = prefs.getString("defaultReciterId", "afs") ?: "afs",
-        keepScreenOn = prefs.getBoolean("keepScreenOn", true),
-        showNavLabels = prefs.getBoolean("showNavLabels", true),
-        isGridView = prefs.getBoolean("isGridView", false),
-        vibrateOnTasbih = prefs.getBoolean("vibrateOnTasbih", true),
-        notificationsEnabled = prefs.getBoolean("notificationsEnabled", true),
-        lastSurahNumber = prefs.getInt("lastSurahNumber", 1),
-        lastSurahName = prefs.getString("lastSurahName", "سُورَةُ ٱلْفَاتِحَةِ") ?: "سُورَةُ ٱلْفَاتِحَةِ",
-        tasbihCount = prefs.getInt("tasbihCount", 0),
-        totalReadAyahs = prefs.getInt("totalReadAyahs", 0)
-    )
+    private val _settings = MutableStateFlow(AppSettingsState())
+    val settings: StateFlow<AppSettingsState> = _settings.asStateFlow()
 
-    fun saveSettings(s: AppSettings) {
-        prefs.edit().apply {
-            putFloat("fontSize", s.fontSize)
-            putBoolean("useUthmanicFont", s.useUthmanicFont)
-            putBoolean("isBoldFont", s.isBoldFont)
-            putFloat("lineSpacing", s.lineSpacing)
-            putBoolean("isMushafMode", s.isMushafMode)
-            putBoolean("showAyahMarkers", s.showAyahMarkers)
-            putBoolean("isDarkMode", s.isDarkMode)
-            putInt("themeIndex", s.themeIndex)
-            putFloat("cardCornerRadius", s.cardCornerRadius)
-            putString("defaultReciterId", s.defaultReciterId)
-            putBoolean("keepScreenOn", s.keepScreenOn)
-            putBoolean("showNavLabels", s.showNavLabels)
-            putBoolean("isGridView", s.isGridView)
-            putBoolean("vibrateOnTasbih", s.vibrateOnTasbih)
-            putBoolean("notificationsEnabled", s.notificationsEnabled)
-            putInt("lastSurahNumber", s.lastSurahNumber)
-            putString("lastSurahName", s.lastSurahName)
-            putInt("tasbihCount", s.tasbihCount)
-            putInt("totalReadAyahs", s.totalReadAyahs)
-            apply()
+    fun init(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        _settings.value = AppSettingsState(
+            touchSoundEnabled = prefs.getBoolean("touch_sound", true),
+            vibrationEnabled = prefs.getBoolean("vibration", true),
+            nightMushafMode = prefs.getBoolean("night_mushaf", false),
+            keepScreenOn = prefs.getBoolean("keep_screen_on", true),
+            lastReadPage = prefs.getInt("last_read_page", 1).coerceIn(1, 604),
+            lastReadSurahName = prefs.getString("last_read_surah", "سورة الفاتحة") ?: "سورة الفاتحة",
+            selectedReciterId = prefs.getString("selected_reciter", "afs") ?: "afs",
+            totalTasbihCount = prefs.getInt("total_tasbih", 0)
+        )
+    }
+
+    fun playTouchSound(view: View?) {
+        if (_settings.value.touchSoundEnabled) {
+            view?.playSoundEffect(SoundEffectConstants.CLICK)
         }
     }
 
-    fun saveLastRead(surahNumber: Int, surahName: String, ayahsCount: Int = 0) {
-        val prevTotal = prefs.getInt("totalReadAyahs", 0)
-        prefs.edit()
-            .putInt("lastSurahNumber", surahNumber)
-            .putString("lastSurahName", surahName)
-            .putInt("totalReadAyahs", prevTotal + ayahsCount)
+    fun setTouchSound(context: Context, enabled: Boolean) {
+        _settings.value = _settings.value.copy(touchSoundEnabled = enabled)
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean("touch_sound", enabled).apply()
+    }
+
+    fun setVibration(context: Context, enabled: Boolean) {
+        _settings.value = _settings.value.copy(vibrationEnabled = enabled)
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean("vibration", enabled).apply()
+    }
+
+    fun setNightMushafMode(context: Context, enabled: Boolean) {
+        _settings.value = _settings.value.copy(nightMushafMode = enabled)
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean("night_mushaf", enabled).apply()
+    }
+
+    fun setKeepScreenOn(context: Context, enabled: Boolean) {
+        _settings.value = _settings.value.copy(keepScreenOn = enabled)
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean("keep_screen_on", enabled).apply()
+    }
+
+    fun updateLastRead(context: Context, page: Int, surahName: String) {
+        val safePage = page.coerceIn(1, 604)
+        _settings.value = _settings.value.copy(
+            lastReadPage = safePage,
+            lastReadSurahName = surahName
+        )
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt("last_read_page", safePage)
+            .putString("last_read_surah", surahName)
             .apply()
     }
 
-    fun saveTasbihCount(count: Int) {
-        prefs.edit().putInt("tasbihCount", count).apply()
+    fun setSelectedReciter(context: Context, reciterId: String) {
+        _settings.value = _settings.value.copy(selectedReciterId = reciterId)
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putString("selected_reciter", reciterId).apply()
     }
 
-    fun getBookmarks(): List<BookmarkItem> {
-        val raw = prefs.getString("bookmarks_json", "[]") ?: "[]"
-        val list = mutableListOf<BookmarkItem>()
-        try {
-            val arr = JSONArray(raw)
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                list.add(
-                    BookmarkItem(
-                        surahNumber = obj.getInt("surahNumber"),
-                        surahName = obj.getString("surahName"),
-                        ayahNumber = obj.getInt("ayahNumber"),
-                        ayahText = obj.getString("ayahText")
-                    )
-                )
-            }
-        } catch (_: Exception) { }
-        return list
+    fun incrementTotalTasbih(context: Context) {
+        val updated = _settings.value.totalTasbihCount + 1
+        _settings.value = _settings.value.copy(totalTasbihCount = updated)
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putInt("total_tasbih", updated).apply()
     }
 
-    fun addBookmark(item: BookmarkItem) {
-        val current = getBookmarks().toMutableList()
-        if (current.none { it.surahNumber == item.surahNumber && it.ayahNumber == item.ayahNumber }) {
-            current.add(0, item)
-            saveBookmarks(current)
-        }
+    fun getFavoritePages(context: Context): Set<Int> {
+        val raw = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getStringSet("favorite_pages", emptySet()) ?: emptySet()
+        return raw.mapNotNull { it.toIntOrNull() }.toSet()
     }
 
-    fun removeBookmark(item: BookmarkItem) {
-        val current = getBookmarks().filterNot {
-            it.surahNumber == item.surahNumber && it.ayahNumber == item.ayahNumber
-        }
-        saveBookmarks(current)
-    }
-
-    private fun saveBookmarks(list: List<BookmarkItem>) {
-        val arr = JSONArray()
-        list.forEach {
-            val obj = JSONObject()
-            obj.put("surahNumber", it.surahNumber)
-            obj.put("surahName", it.surahName)
-            obj.put("ayahNumber", it.ayahNumber)
-            obj.put("ayahText", it.ayahText)
-            arr.put(obj)
-        }
-        prefs.edit().putString("bookmarks_json", arr.toString()).apply()
-    }
-
-    fun resetAll() {
-        prefs.edit().clear().apply()
+    fun toggleFavoritePage(context: Context, page: Int): Set<Int> {
+        val current = getFavoritePages(context).toMutableSet()
+        if (current.contains(page)) current.remove(page) else current.add(page)
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putStringSet("favorite_pages", current.map { it.toString() }.toSet()).apply()
+        return current
     }
 }
 
-object QuranNotificationHelper {
-    private const val CHANNEL_ID = "quran_daily_reminders"
+object AudioDownloadManager {
+    private val _downloadProgress = MutableStateFlow>(emptyMap())
+    val downloadProgress: StateFlow> = _downloadProgress.asStateFlow()
 
-    fun showReminderNotification(context: Context, title: String, message: String) {
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "تذكيرات القرآن والأذكار",
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                description = "إشعارات يومية للأذكار وورد القرآن الكريم"
+    private fun key(reciterId: String, surahNumber: Int) = "${reciterId}_$surahNumber"
+
+    fun getLocalAudioFile(context: Context, reciterId: String, surahNumber: Int): File {
+        val dir = File(context.filesDir, "quran_audio/$reciterId")
+        if (!dir.exists()) dir.mkdirs()
+        val padded = surahNumber.toString().padStart(3, '0')
+        return File(dir, "$padded.mp3")
+    }
+
+    fun isSurahDownloaded(context: Context, reciterId: String, surahNumber: Int): Boolean {
+        val file = getLocalAudioFile(context, reciterId, surahNumber)
+        return file.exists() && file.length() > 2048L
+    }
+
+    fun getDownloadedCount(context: Context, reciterId: String): Int {
+        val dir = File(context.filesDir, "quran_audio/$reciterId")
+        if (!dir.exists()) return 0
+        return dir.listFiles()?.count { it.extension == "mp3" && it.length() > 2048L } ?: 0
+    }
+
+    suspend fun downloadSurah(
+        context: Context,
+        reciter: ReciterInfo,
+        surahNumber: Int
+    ): Boolean = withContext(Dispatchers.IO) {
+        val taskKey = key(reciter.id, surahNumber)
+        if (_downloadProgress.value.containsKey(taskKey)) return@withContext false
+
+        val targetFile = getLocalAudioFile(context, reciter.id, surahNumber)
+        val tempFile = File(targetFile.parentFile, "${targetFile.name}.tmp")
+        val padded = surahNumber.toString().padStart(3, '0')
+        val urlString = "${reciter.audioBaseUrl}/$padded.mp3"
+
+        try {
+            _downloadProgress.value = _downloadProgress.value + (taskKey to 1)
+            val connection = (URL(urlString).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 15000
+                readTimeout = 20000
+                instanceFollowRedirects = true
+                connect()
             }
-            manager.createNotificationChannel(channel)
+
+            if (connection.responseCode !in 200..299) {
+                _downloadProgress.value = _downloadProgress.value - taskKey
+                return@withContext false
+            }
+
+            val totalBytes = connection.contentLength.toLong()
+            connection.inputStream.use { input ->
+                FileOutputStream(tempFile).use { output ->
+                    val buffer = ByteArray(8192)
+                    var bytesCopied = 0L
+                    var read: Int
+                    while (input.read(buffer).also { read = it } != -1) {
+                        output.write(buffer, 0, read)
+                        bytesCopied += read
+                        val percent = if (totalBytes > 0L) {
+                            ((bytesCopied * 100) / totalBytes).toInt().coerceIn(1, 99)
+                        } else {
+                            50
+                        }
+                        _downloadProgress.value = _downloadProgress.value + (taskKey to percent)
+                    }
+                    output.flush()
+                }
+            }
+
+            if (tempFile.exists() && tempFile.length() > 2048L) {
+                if (targetFile.exists()) targetFile.delete()
+                tempFile.renameTo(targetFile)
+                _downloadProgress.value = _downloadProgress.value + (taskKey to 100)
+                _downloadProgress.value = _downloadProgress.value - taskKey
+                return@withContext true
+            } else {
+                tempFile.delete()
+                _downloadProgress.value = _downloadProgress.value - taskKey
+                return@withContext false
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            tempFile.delete()
+            _downloadProgress.value = _downloadProgress.value - taskKey
+            return@withContext false
         }
-
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            context, 0, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_quran)
-            .setContentTitle(title)
-            .setContentText(message)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .build()
-
-        manager.notify(1001, notification)
     }
 }
 
 object QuranRepository {
-    // قراء بتلاوات كاملة متصلة للسورة بدون تقطيع
-    val fullSurahReciters = listOf(
-        ReciterInfo("afs", "مشاري راشد العفاسي", "https://server8.mp3quran.net/afs/"),
-        ReciterInfo("sds", "عبدالرحمن السديس", "https://server11.mp3quran.net/sds/"),
-        ReciterInfo("shur", "سعود الشريم", "https://server7.mp3quran.net/shur/"),
-        ReciterInfo("maher", "ماهر المعيقلي", "https://server12.mp3quran.net/maher/"),
-        ReciterInfo("husr", "محمود خليل الحصري", "https://server13.mp3quran.net/husr/"),
-        ReciterInfo("minsh", "محمد صديق المنشاوي", "https://server10.mp3quran.net/minsh/"),
-        ReciterInfo("yasser", "ياسر الدوسري", "https://server11.mp3quran.net/yasser/"),
-        ReciterInfo("ajm", "أحمد بن علي العجمي", "https://server10.mp3quran.net/ajm/")
-    )
 
-    fun buildFullSurahAudioUrl(reciterId: String, surahNumber: Int): String {
-        val reciter = fullSurahReciters.find { it.id == reciterId } ?: fullSurahReciters.first()
-        val padded = surahNumber.toString().padStart(3, '0')
-        return "${reciter.serverUrl}$padded.mp3"
+    const val TOTAL_MUSHAF_PAGES = 604
+
+    // رابط صفحات مصحف المدينة المنورة المصورة عالية الدقة (604 صفحات)
+    fun getMushafPageImageUrl(pageNumber: Int): String {
+        val safePage = pageNumber.coerceIn(1, TOTAL_MUSHAF_PAGES)
+        val padded = safePage.toString().padStart(3, '0')
+        return "https://android.quran.com/data/width_1024/page$padded.png"
     }
 
-    // تحميل وتوفير الخط العثماني الأصلي لمجمع الملك فهد (Hafs Uthmanic)
-    suspend fun getUthmanicFontFamily(context: Context): FontFamily = withContext(Dispatchers.IO) {
-        val fontFile = File(context.filesDir, "UthmanicHafs.ttf")
-        try {
-            if (!fontFile.exists() || fontFile.length() < 10000) {
-                val urls = listOf(
-                    "https://raw.githubusercontent.com/thetruetruth/quran-data-kfgqpc/main/hafs/font/hafs.18.ttf",
-                    "https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/fonts/uthmanic_hafs_v20.ttf"
-                )
-                for (u in urls) {
-                    try {
-                        val bytes = URL(u).readBytes()
-                        if (bytes.size > 10000) {
-                            fontFile.writeBytes(bytes)
-                            break
-                        }
-                    } catch (_: Exception) { }
-                }
-            }
-            if (fontFile.exists() && fontFile.length() > 10000) {
-                val tf = Typeface.createFromFile(fontFile)
-                FontFamily(tf)
-            } else {
-                FontFamily.Serif
-            }
-        } catch (_: Exception) {
-            FontFamily.Serif
-        }
-    }
-
-    val adhkarCategories = mapOf(
-        "أذكار الصباح والمساء" to listOf(
-            GuideItem("سيد الاستغفار", "اللهم أنت ربي لا إله إلا أنت، خلقتني وأنا عبدك، وأنا على عهدك ووعدك ما استطعت، أعوذ بك من شر ما صنعت، أبوء لك بنعمتك علي، وأبوء بذنبي فاغفر لي فإنه لا يغفر الذنوب إلا أنت.", 1),
-            GuideItem("آية الكرسي", "قراءة آية الكرسي مرة واحدة صباحاً ومساءً للحفظ من كل سوء.", 1),
-            GuideItem("المعوذات الثلاث", "قراءة سورة الإخلاص والفلق والناس ثلاث مرات صباحاً ومساءً.", 3),
-            GuideItem("التسبيح والتهليل", "سبحان الله وبحمده: مائة مرة، ولا إله إلا الله وحده لا شريك له: مائة مرة.", 100),
-            GuideItem("الحفظ من الضرر", "بسم الله الذي لا يضر مع اسمه شيء في الأرض ولا في السماء وهو السميع العليم.", 3),
-            GuideItem("الرضا بالله", "رضيت بالله رباً، وبالإسلام ديناً، وبمحمد صلى الله عليه وسلم نبياً.", 3)
+    val reciters = listOf(
+        ReciterInfo(
+            id = "afs",
+            name = "مشاري راشد العفاسي",
+            style = "حفص عن عاصم - مرتل",
+            audioBaseUrl = "https://server8.mp3quran.net/afs",
+            imageUrl = "https://static.qurancdn.com/images/reciters/6/mishary-rashid-alafasy-profile.jpeg"
         ),
-        "أذكار بعد الصلاة" to listOf(
-            GuideItem("الاستغفار بعد السلام", "أستغفر الله (ثلاثاً)، اللهم أنت السلام ومنك السلام تباركت يا ذا الجلال والإكرام.", 1),
-            GuideItem("التسبيح عقب الصلاة", "سبحان الله (33)، والحمد لله (33)، والله أكبر (33)، وتمام المائة لا إله إلا الله وحده لا شريك له.", 33),
-            GuideItem("دعاء الإعانة", "اللهم أعني على ذكرك وشكرك وحسن عبادتك.", 1)
+        ReciterInfo(
+            id = "basit",
+            name = "عبد الباسط عبد الصمد",
+            style = "المصحف المرتل",
+            audioBaseUrl = "https://server7.mp3quran.net/basit",
+            imageUrl = "https://static.qurancdn.com/images/reciters/1/abdulbaset-abdulsamad-profile.jpeg"
         ),
-        "أذكار النوم" to listOf(
-            GuideItem("باسمك اللهم", "باسمك ربي وضعت جنبي وبك أرفعه، فإن أمسكت نفسي فارحمها، وإن أرسلتها فاحفظها بما تحفظ به عبادك الصالحين.", 1),
-            GuideItem("تسبيح النوم", "سبحان الله (33)، والحمد لله (33)، والله أكبر (34) قبل المنام.", 33),
-            GuideItem("النفث بالمعوذات", "جمع الكفين والنفث فيهما وقراءة الإخلاص والفلق والناس ومسح الجسد ثلاثاً.", 3)
+        ReciterInfo(
+            id = "maher",
+            name = "ماهر المعيقلي",
+            style = "حفص عن عاصم - مرتل",
+            audioBaseUrl = "https://server12.mp3quran.net/maher",
+            imageUrl = "https://static.qurancdn.com/images/reciters/10/maher-al-muaiqly-profile.jpeg"
+        ),
+        ReciterInfo(
+            id = "s_gmd",
+            name = "سعد الغامدي",
+            style = "حفص عن عاصم - مرتل",
+            audioBaseUrl = "https://server7.mp3quran.net/s_gmd",
+            imageUrl = "https://static.qurancdn.com/images/reciters/7/saad-al-ghamdi-profile.jpeg"
+        ),
+        ReciterInfo(
+            id = "yasser",
+            name = "ياسر الدوسري",
+            style = "حفص عن عاصم - مرتل",
+            audioBaseUrl = "https://server11.mp3quran.net/yasser",
+            imageUrl = "https://static.qurancdn.com/images/reciters/11/yasser-ad-dussary-profile.jpeg"
         )
     )
 
-    val prayerSteps = mapOf(
-        "صفة الوضوء" to listOf(
-            GuideItem("1. النية والتسمية", "ينوي المسلم الوضوء بقلبه لرفع الحدث ثم يقول: بسم الله."),
-            GuideItem("2. غسل الكفين والمضمضة والاستنشاق", "يغسل كفيه ثلاثاً، ثم يتمضمض ويستنشق ثلاث مرات."),
-            GuideItem("3. غسل الوجه واليدين", "يغسل وجهه كاملاً ثلاثاً، ثم يغسل يديه من أطراف الأصابع إلى المرفقين ثلاثاً."),
-            GuideItem("4. مسح الرأس والأذنين وغسل الرجلين", "يمسح رأسه وأذنيه مرة واحدة، ثم يغسل رجليه مع الكعبين ثلاثاً.")
+    val surahs = listOf(
+        SurahInfo(1, "سورة الفاتحة", "مكية", 7, 1),
+        SurahInfo(2, "سورة البقرة", "مدنية", 286, 2),
+        SurahInfo(3, "سورة آل عمران", "مدنية", 200, 50),
+        SurahInfo(4, "سورة النساء", "مدنية", 176, 77),
+        SurahInfo(5, "سورة المائدة", "مدنية", 120, 106),
+        SurahInfo(6, "سورة الأنعام", "مكية", 165, 128),
+        SurahInfo(7, "سورة الأعراف", "مكية", 206, 151),
+        SurahInfo(8, "سورة الأنفال", "مدنية", 75, 177),
+        SurahInfo(9, "سورة التوبة", "مدنية", 129, 187),
+        SurahInfo(10, "سورة يونس", "مكية", 109, 208),
+        SurahInfo(11, "سورة هود", "مكية", 123, 221),
+        SurahInfo(12, "سورة يوسف", "مكية", 111, 235),
+        SurahInfo(13, "سورة الرعد", "مدنية", 43, 249),
+        SurahInfo(14, "سورة إبراهيم", "مكية", 52, 255),
+        SurahInfo(15, "سورة الحجر", "مكية", 99, 262),
+        SurahInfo(16, "سورة النحل", "مكية", 128, 267),
+        SurahInfo(17, "سورة الإسراء", "مكية", 111, 282),
+        SurahInfo(18, "سورة الكهف", "مكية", 110, 293),
+        SurahInfo(19, "سورة مريم", "مكية", 98, 305),
+        SurahInfo(20, "سورة طه", "مكية", 135, 312),
+        SurahInfo(21, "سورة الأنبياء", "مكية", 112, 322),
+        SurahInfo(22, "سورة الحج", "مدنية", 78, 332),
+        SurahInfo(23, "سورة المؤمنون", "مكية", 118, 342),
+        SurahInfo(24, "سورة النور", "مدنية", 64, 350),
+        SurahInfo(25, "سورة الفرقان", "مكية", 77, 359),
+        SurahInfo(26, "سورة الشعراء", "مكية", 227, 367),
+        SurahInfo(27, "سورة النمل", "مكية", 93, 377),
+        SurahInfo(28, "سورة القصص", "مكية", 88, 385),
+        SurahInfo(29, "سورة العنكبوت", "مكية", 69, 396),
+        SurahInfo(30, "سورة الروم", "مكية", 60, 404),
+        SurahInfo(31, "سورة لقمان", "مكية", 34, 411),
+        SurahInfo(32, "سورة السجدة", "مكية", 30, 415),
+        SurahInfo(33, "سورة الأحزاب", "مدنية", 73, 418),
+        SurahInfo(34, "سورة سبأ", "مكية", 54, 428),
+        SurahInfo(35, "سورة فاطر", "مكية", 45, 434),
+        SurahInfo(36, "سورة يس", "مكية", 83, 440),
+        SurahInfo(37, "سورة الصافات", "مكية", 182, 446),
+        SurahInfo(38, "سورة ص", "مكية", 88, 453),
+        SurahInfo(39, "سورة الزمر", "مكية", 75, 458),
+        SurahInfo(40, "سورة غافر", "مكية", 85, 467),
+        SurahInfo(41, "سورة فصلت", "مكية", 54, 477),
+        SurahInfo(42, "سورة الشورى", "مكية", 53, 483),
+        SurahInfo(43, "سورة الزخرف", "مكية", 89, 489),
+        SurahInfo(44, "سورة الدخان", "مكية", 59, 496),
+        SurahInfo(45, "سورة الجاثية", "مكية", 37, 499),
+        SurahInfo(46, "سورة الأحقاف", "مكية", 35, 502),
+        SurahInfo(47, "سورة محمد", "مدنية", 38, 507),
+        SurahInfo(48, "سورة الفتح", "مدنية", 29, 511),
+        SurahInfo(49, "سورة الحجرات", "مدنية", 18, 515),
+        SurahInfo(50, "سورة ق", "مكية", 45, 518),
+        SurahInfo(51, "سورة الذاريات", "مكية", 60, 520),
+        SurahInfo(52, "سورة الطور", "مكية", 49, 523),
+        SurahInfo(53, "سورة النجم", "مكية", 62, 526),
+        SurahInfo(54, "سورة القمر", "مكية", 55, 528),
+        SurahInfo(55, "سورة الرحمن", "مدنية", 78, 531),
+        SurahInfo(56, "سورة الواقعة", "مكية", 96, 534),
+        SurahInfo(57, "سورة الحديد", "مدنية", 29, 537),
+        SurahInfo(58, "سورة المجادلة", "مدنية", 22, 542),
+        SurahInfo(59, "سورة الحشر", "مدنية", 24, 545),
+        SurahInfo(60, "سورة الممتحنة", "مدنية", 13, 549),
+        SurahInfo(61, "سورة الصف", "مدنية", 14, 551),
+        SurahInfo(62, "سورة الجمعة", "مدنية", 11, 553),
+        SurahInfo(63, "سورة المنافقون", "مدنية", 11, 554),
+        SurahInfo(64, "سورة التغابن", "مدنية", 18, 556),
+        SurahInfo(65, "سورة الطلاق", "مدنية", 12, 558),
+        SurahInfo(66, "سورة التحريم", "مدنية", 12, 560),
+        SurahInfo(67, "سورة الملك", "مكية", 30, 562),
+        SurahInfo(68, "سورة القلم", "مكية", 52, 564),
+        SurahInfo(69, "سورة الحاقة", "مكية", 52, 566),
+        SurahInfo(70, "سورة المعارج", "مكية", 44, 568),
+        SurahInfo(71, "سورة نوح", "مكية", 28, 570),
+        SurahInfo(72, "سورة الجن", "مكية", 28, 572),
+        SurahInfo(73, "سورة المزمل", "مكية", 20, 574),
+        SurahInfo(74, "سورة المدثر", "مكية", 56, 575),
+        SurahInfo(75, "سورة القيامة", "مكية", 40, 577),
+        SurahInfo(76, "سورة الإنسان", "مدنية", 31, 578),
+        SurahInfo(77, "سورة المرسلات", "مكية", 50, 580),
+        SurahInfo(78, "سورة النبأ", "مكية", 40, 582),
+        SurahInfo(79, "سورة النازعات", "مكية", 46, 583),
+        SurahInfo(80, "سورة عبس", "مكية", 42, 585),
+        SurahInfo(81, "سورة التكوير", "مكية", 29, 586),
+        SurahInfo(82, "سورة الانفطار", "مكية", 19, 587),
+        SurahInfo(83, "سورة المطففين", "مكية", 36, 587),
+        SurahInfo(84, "سورة الانشقاق", "مكية", 25, 589),
+        SurahInfo(85, "سورة البروج", "مكية", 22, 590),
+        SurahInfo(86, "سورة الطارق", "مكية", 17, 591),
+        SurahInfo(87, "سورة الأعلى", "مكية", 19, 591),
+        SurahInfo(88, "سورة الغاشية", "مكية", 26, 592),
+        SurahInfo(89, "سورة الفجر", "مكية", 30, 593),
+        SurahInfo(90, "سورة البلد", "مكية", 20, 594),
+        SurahInfo(91, "سورة الشمس", "مكية", 15, 595),
+        SurahInfo(92, "سورة الليل", "مكية", 21, 595),
+        SurahInfo(93, "سورة الضحى", "مكية", 11, 596),
+        SurahInfo(94, "سورة الشرح", "مكية", 8, 596),
+        SurahInfo(95, "سورة التين", "مكية", 8, 597),
+        SurahInfo(96, "سورة العلق", "مكية", 19, 597),
+        SurahInfo(97, "سورة القدر", "مكية", 5, 598),
+        SurahInfo(98, "سورة البينة", "مدنية", 8, 598),
+        SurahInfo(99, "سورة الزلزلة", "مدنية", 8, 599),
+        SurahInfo(100, "سورة العاديات", "مكية", 11, 599),
+        SurahInfo(101, "سورة القارعة", "مكية", 11, 600),
+        SurahInfo(102, "سورة التكاثر", "مكية", 8, 600),
+        SurahInfo(103, "سورة العصر", "مكية", 3, 601),
+        SurahInfo(104, "سورة الهمزة", "مكية", 9, 601),
+        SurahInfo(105, "سورة الفيل", "مكية", 5, 601),
+        SurahInfo(106, "سورة قريش", "مكية", 4, 602),
+        SurahInfo(107, "سورة الماعون", "مكية", 7, 602),
+        SurahInfo(108, "سورة الكوثر", "مكية", 3, 602),
+        SurahInfo(109, "سورة الكافرون", "مكية", 6, 603),
+        SurahInfo(110, "سورة النصر", "مدنية", 3, 603),
+        SurahInfo(111, "سورة المسد", "مكية", 5, 603),
+        SurahInfo(112, "سورة الإخلاص", "مكية", 4, 604),
+        SurahInfo(113, "سورة الفلق", "مكية", 5, 604),
+        SurahInfo(114, "سورة الناس", "مكية", 6, 604)
+    )
+
+    fun getSurahNameByNumber(number: Int): String {
+        return surahs.find { it.number == number }?.name ?: "سورة الفاتحة"
+    }
+
+    fun getSurahByPage(page: Int): SurahInfo {
+        return surahs.lastOrNull { it.startPage <= page } ?: surahs.first()
+    }
+
+    fun getJuzByPage(page: Int): Int {
+        return ((page - 2) / 20 + 1).coerceIn(1, 30)
+    }
+
+    val hadiths = listOf(
+        HadithItem(
+            id = 1,
+            title = "إنما الأعمال بالنيات",
+            text = "عَنْ أَمِيرِ الْمُؤْمِنِينَ أَبِي حَفْصٍ عُمَرَ بْنِ الْخَطَّابِ رَضِيَ اللَّهُ عَنْهُ قَالَ: سَمِعْتُ رَسُولَ اللَّهِ ﷺ يَقُولُ: «إِنَّمَا الأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى، فَمَنْ كَانَتْ هِجْرَتُهُ إِلَى اللَّهِ وَرَسُولِهِ فَهِجْرَتُهُ إِلَى اللَّهِ وَرَسُولِهِ، وَمَنْ كَانَتْ هِجْرَتُهُ لِدُنْيَا يُصِيبُهَا أَوْ امْرَأَةٍ يَنْكِحُهَا فَهِجْرَتُهُ إِلَى مَا هَاجَرَ إِلَيْهِ».",
+            narrator = "عمر بن الخطاب رضي الله عنه",
+            source = "متفق عليه (البخاري ومسلم)",
+            explanation = "أصل عظيم في الإسلام يبين أن قبول الأعمال وثوابها عند الله مرتبط بإخلاص النية لوجهه الكريم."
         ),
-        "صفة الصلاة" to listOf(
-            GuideItem("1. استقبال القبلة وتكبيرة الإحرام", "يستقبل القبلة قائماً ويرفع يديه حذو منكبيه قائلاً: الله أكبر."),
-            GuideItem("2. الاستفتاح وقراءة الفاتحة", "يقرأ دعاء الاستفتاح، ثم سورة الفاتحة (ركن)، وما تيسر من القرآن."),
-            GuideItem("3. الركوع والاعتدال منه", "يكبر ويركع مطمئناً ويقول: سبحان ربي العظيم (ثلاثاً)، ثم يرفع قائلاً: سمع الله لمن حمده."),
-            GuideItem("4. السجود والجلوس بين السجدتين", "يسجد على أعضائه السبعة قائلاً: سبحان ربي الأعلى (ثلاثاً)، ويجلس بينهما مطمئناً."),
-            GuideItem("5. التشهد والتسليم", "يقرأ التشهد والصلاة الإبراهيمية في الجلسة الأخيرة، ثم يسلم عن يمينه وشماله: السلام عليكم ورحمة الله.")
+        HadithItem(
+            id = 2,
+            title = "بني الإسلام على خمس",
+            text = "عَنْ أَبِي عَبْدِ الرَّحْمَنِ عَبْدِ اللَّهِ بْنِ عُمَرَ بْنِ الْخَطَّابِ رَضِيَ اللَّهُ عَنْهُمَا قَالَ: سَمِعْتُ رَسُولَ اللَّهِ ﷺ يَقُولُ: «بُنِيَ الإِسْلامُ عَلَى خَمْسٍ: شَهَادَةِ أَنْ لا إِلَهَ إِلا اللَّهُ وَأَنَّ مُحَمَّدًا رَسُولُ اللَّهِ، وَإِقَامِ الصَّلاةِ، وَإِيتَاءِ الزَّكَاةِ، وَحَجِّ الْبَيْتِ، وَصَوْمِ رَمَضَانَ».",
+            narrator = "عبد الله بن عمر رضي الله عنهما",
+            source = "متفق عليه (البخاري ومسلم)",
+            explanation = "يوضح الحديث أركان الإسلام الخمسة التي يقوم عليها دين المسلم."
         ),
-        "أركان الصلاة" to listOf(
-            GuideItem("القيام مع القدرة", "الوقوف في صلاة الفريضة لمن استطاع ذلك."),
-            GuideItem("تكبيرة الإحرام", "قول (الله أكبر) في بداية الدخول في الصلاة."),
-            GuideItem("قراءة الفاتحة", "قراءتها في كل ركعة من ركعات الصلاة."),
-            GuideItem("الركوع والسجود والطمأنينة", "الاطمئنان في كل ركن وعدم الاستعجال فيه، والترتيب بين الأركان.")
+        HadithItem(
+            id = 3,
+            title = "من حسن إسلام المرء",
+            text = "عَنْ أَبِي هُرَيْرَةَ رَضِيَ اللَّهُ عَنْهُ قَالَ: قَالَ رَسُولُ اللَّهِ ﷺ: «مِنْ حُسْنِ إِسْلامِ الْمَرْءِ تَرْكُهُ مَا لا يَعْنِيهِ».",
+            narrator = "أبو هريرة رضي الله عنه",
+            source = "رواه الترمذي (حديث حسن)",
+            explanation = "من علامات كمال إيمان المسلم انشغاله بما ينفعه في دينه ودنياه وتركه الفضول فيما لا يخصه."
+        ),
+        HadithItem(
+            id = 4,
+            title = "لا يؤمن أحدكم حتى يحب لأخيه",
+            text = "عَنْ أَبِي حَمْزَةَ أَنَسِ بْنِ مَالِكٍ رَضِيَ اللَّهُ عَنْهُ خَادِمِ رَسُولِ اللَّهِ ﷺ عَنِ النَّبِيِّ ﷺ قَالَ: «لا يُؤْمِنُ أَحَدُكُمْ حَتَّى يُحِبَّ لأَخِيهِ مَا يُحِبُّ لِنَفْسِهِ».",
+            narrator = "أنس بن مالك رضي الله عنه",
+            source = "متفق عليه (البخاري ومسلم)",
+            explanation = "يربي الحديث قلب المؤمن على سلامة الصدر ونقاء السريرة ومحبة الخير لجميع المسلمين."
+        ),
+        HadithItem(
+            id = 5,
+            title = "الكلمة الطيبة صدقة",
+            text = "عَنْ أَبِي هُرَيْرَةَ رَضِيَ اللَّهُ عَنْهُ قَالَ: قَالَ رَسُولُ اللَّهِ ﷺ: «كُلُّ سُلامَى مِنَ النَّاسِ عَلَيْهِ صَدَقَةٌ، كُلَّ يَوْمٍ تَطْلُعُ فِيهِ الشَّمْسُ: تَعْدِلُ بَيْنَ الاثْنَيْنِ صَدَقَةٌ، وَتُعِينُ الرَّجُلَ فِي دَابَّتِهِ فَتَحْمِلُهُ عَلَيْهَا أَوْ تَرْفَعُ لَهُ عَلَيْهَا مَتَاعَهُ صَدَقَةٌ، وَالْكَلِمَةُ الطَّيِّبَةُ صَدَقَةٌ، وَبِكُلِّ خُطْوَةٍ تَمْشِيهَا إِلَى الصَّلاةِ صَدَقَةٌ، وَتُمِيطُ الأَذَى عَنِ الطَّرِيقِ صَدَقَةٌ».",
+            narrator = "أبو هريرة رضي الله عنه",
+            source = "متفق عليه (البخاري ومسلم)",
+            explanation = "يفتح الحديث أبواب الخير والصدقة اليومية لكل مسلم بيسر وسهولة."
+        ),
+        HadithItem(
+            id = 6,
+            title = "اتق الله حيثما كنت",
+            text = "عَنْ أَبِي ذَرٍّ جُنْدَبِ بْنِ جُنَادَةَ وَأَبِي عَبْدِ الرَّحْمَنِ مُعَاذِ بْنِ جَبَلٍ رَضِيَ اللَّهُ عَنْهُمَا عَنْ رَسُولِ اللَّهِ ﷺ قَالَ: «اتَّقِ اللَّهَ حَيْثُمَا كُنْتَ، وَأَتْبِعِ السَّيِّئَةَ الْحَسَنَةَ تَمْحُهَا، وَخَالِقِ النَّاسَ بِخُلُقٍ حَسَنٍ».",
+            narrator = "أبو ذر ومعاذ بن جبل رضي الله عنهما",
+            source = "رواه الترمذي",
+            explanation = "وصية نبوية جامعة تجمع حقوق الله بالتقوى والاستغفار، وحقوق العباد بحسن الخلق."
+        ),
+        HadithItem(
+            id = 7,
+            title = "الدين النصيحة",
+            text = "عَنْ أَبِي رُقَيَّةَ تَمِيمِ بْنِ أَوْسٍ الدَّارِيِّ رَضِيَ اللَّهُ عَنْهُ أَنَّ النَّبِيَّ ﷺ قَالَ: «الدِّينُ النَّصِيحَةُ» قُلْنَا: لِمَنْ؟ قَالَ: «لِلَّهِ وَلِكِتَابِهِ وَلِرَسُولِهِ وَلأَئِمَّةِ الْمُسْلِمِينَ وَعَامَّتِهِمْ».",
+            narrator = "تميم بن أوس الداري رضي الله عنه",
+            source = "رواه مسلم",
+            explanation = "يبين الحديث أن قوام الدين وكماله في صدق التوجه لله والعمل بكتابه وسنة نبيه وبذل الخير للناس."
+        ),
+        HadithItem(
+            id = 8,
+            title = "فضل قراءة القرآن",
+            text = "عَنْ أَبِي أُمَامَةَ الْبَاهِلِيِّ رَضِيَ اللَّهُ عَنْهُ قَالَ: سَمِعْتُ رَسُولَ اللَّهِ ﷺ يَقُولُ: «اقْرَءُوا الْقُرْآنَ فَإِنَّهُ يَأْتِي يَوْمَ الْقِيَامَةِ شَفِيعًا لأَصْحَابِهِ».",
+            narrator = "أبو أمامة الباهلي رضي الله عنه",
+            source = "رواه مسلم",
+            explanation = "حثٌّ عظيم على ملازمة تلاوة القرآن الكريم وتدبره لينال المسلم شفاعته يوم القيامة."
         )
     )
 
-    suspend fun getSurahList(context: Context): List<SurahInfo> = withContext(Dispatchers.IO) {
-        val cacheFile = File(context.filesDir, "surahs_list_v2.json")
-        val jsonStr = try {
-            val fresh = URL("https://api.alquran.cloud/v1/surah").readText()
-            cacheFile.writeText(fresh)
-            fresh
-        } catch (e: Exception) {
-            if (cacheFile.exists()) cacheFile.readText() else throw e
-        }
-        val data = JSONObject(jsonStr).getJSONArray("data")
-        val list = mutableListOf<SurahInfo>()
-        for (i in 0 until data.length()) {
-            val obj = data.getJSONObject(i)
-            list.add(
-                SurahInfo(
-                    number = obj.getInt("number"),
-                    name = obj.getString("name"),
-                    englishName = obj.getString("englishName"),
-                    numberOfAyahs = obj.getInt("numberOfAyahs"),
-                    revelationType = obj.getString("revelationType")
-                )
-            )
-        }
-        list
-    }
-
-    suspend fun getSurahDetails(context: Context, surahNumber: Int): List<AyahItem> =
-        withContext(Dispatchers.IO) {
-            val cacheFile = File(context.filesDir, "surah_v2_$surahNumber.json")
-            val jsonStr = try {
-                val url = "https://api.alquran.cloud/v1/surah/$surahNumber/editions/quran-uthmani,ar.muyassar"
-                val fresh = URL(url).readText()
-                cacheFile.writeText(fresh)
-                fresh
-            } catch (e: Exception) {
-                if (cacheFile.exists()) cacheFile.readText() else throw e
-            }
-            val editions = JSONObject(jsonStr).getJSONArray("data")
-            val uthmaniAyahs = editions.getJSONObject(0).getJSONArray("ayahs")
-            val tafsirAyahs = editions.getJSONObject(1).getJSONArray("ayahs")
-
-            val result = mutableListOf<AyahItem>()
-            for (i in 0 until uthmaniAyahs.length()) {
-                val u = uthmaniAyahs.getJSONObject(i)
-                val t = tafsirAyahs.getJSONObject(i)
-                result.add(
-                    AyahItem(
-                        number = u.getInt("number"),
-                        numberInSurah = u.getInt("numberInSurah"),
-                        text = u.getString("text"),
-                        tafsir = t.getString("text"),
-                        juz = u.optInt("juz", 1),
-                        page = u.optInt("page", 1)
-                    )
-                )
-            }
-            result
-        }
-
-    fun clearCache(context: Context) {
-        context.filesDir.listFiles()?.forEach { file ->
-            if (file.name.endsWith(".json")) file.delete()
-        }
-    }
+    val adhkarList = listOf(
+        DhikrItem(
+            id = 1,
+            category = "أذكار الصباح",
+            text = "أَصْبَحْنَا وَأَصْبَحَ الْمُلْكُ لِلَّهِ، وَالْحَمْدُ لِلَّهِ، لاَ إِلَهَ إِلاَّ اللَّهُ وَحْدَهُ لاَ شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ.",
+            targetCount = 1,
+            reward = "بداية اليوم بالتوحيد وحمد الله وطلب خيره."
+        ),
+        DhikrItem(
+            id = 2,
+            category = "أذكار الصباح",
+            text = "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ: عَدَدَ خَلْقِهِ، وَرِضَا نَفْسِهِ، وَزِنَةَ عَرْشِهِ، وَمِدَادَ كَلِمَاتِهِ.",
+            targetCount = 3,
+            reward = "من أعظم الأذكار المضاعفة في الأجر."
+        ),
+        DhikrItem(
+            id = 3,
+            category = "أذكار الصباح",
+            text = "بِسْمِ اللَّهِ الَّذِي لاَ يَضُرُّ مَعَ اسْمِهِ شَيْءٌ فِي الأَرْضِ وَلاَ فِي السَّمَاءِ وَهُوَ السَّمِيعُ الْعَلِيمُ.",
+            targetCount = 3,
+            reward = "من قالها ثلاثاً لم يضره شيء بإذن الله."
+        ),
+        DhikrItem(
+            id = 4,
+            category = "أذكار المساء",
+            text = "أَمْسَيْنَا وَأَمْسَى الْمُلْكُ لِلَّهِ، وَالْحَمْدُ لِلَّهِ، لاَ إِلَهَ إِلاَّ اللَّهُ وَحْدَهُ لاَ شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ.",
+            targetCount = 1,
+            reward = "حفظ وتحصين للمسلم في مسائه."
+        ),
+        DhikrItem(
+            id = 5,
+            category = "أذكار المساء",
+            text = "أَعُوذُ بِكَلِمَاتِ اللَّهِ التَّامَّاتِ مِنْ شَرِّ مَا خَلَقَ.",
+            targetCount = 3,
+            reward = "تحصين من كل شر وآفة في الليل."
+        ),
+        DhikrItem(
+            id = 6,
+            category = "أذكار المساء",
+            text = "حَسْبِيَ اللَّهُ لاَ إِلَهَ إِلاَّ هُوَ عَلَيْهِ تَوَكَّلْتُ وَهُوَ رَبُّ الْعَرْشِ الْعَظِيمِ.",
+            targetCount = 7,
+            reward = "من قالها سبعاً كفاه الله ما أهمه من أمر الدنيا والآخرة."
+        ),
+        DhikrItem(
+            id = 7,
+            category = "أذكار بعد الصلاة",
+            text = "أَسْتَغْفِرُ اللَّهَ (ثلاثاً) اللَّهُمَّ أَنْتَ السَّلاَمُ وَمِنْكَ السَّلاَمُ، تَبَارَكْتَ يَا ذَا الْجَلاَلِ وَالإِكْرَامِ.",
+            targetCount = 3,
+            reward = "سنة نبوية ثابتة عقب السلام من كل صلاة مفروضة."
+        ),
+        DhikrItem(
+            id = 8,
+            category = "أذكار بعد الصلاة",
+            text = "سُبْحَانَ اللَّهِ، وَالْحَمْدُ لِلَّهِ، وَاللَّهُ أَكْبَرُ.",
+            targetCount = 33,
+            reward = "غُفرت خطاياه وإن كانت مثل زبد البحر."
+        ),
+        DhikrItem(
+            id = 9,
+            category = "أذكار النوم",
+            text = "بِاسْمِكَ اللَّهُمَّ أَمُوتُ وَأَحْيَا.",
+            targetCount = 1,
+            reward = "تفويض الأمر لله عند النوم."
+        ),
+        DhikrItem(
+            id = 10,
+            category = "أذكار النوم",
+            text = "سُبْحَانَ اللَّهِ (33) وَالْحَمْدُ لِلَّهِ (33) وَاللَّهُ أَكْبَرُ (34).",
+            targetCount = 33,
+            reward = "خير للمؤمن من خادم وتعينه على نشاطه."
+        )
+    )
 }
