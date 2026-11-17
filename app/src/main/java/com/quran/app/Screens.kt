@@ -16,8 +16,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -108,7 +106,6 @@ fun HomeScreen(
                     .padding(horizontal = 20.dp, vertical = 18.dp)
             ) {
                 Column {
-                    // شريط العنوان العلوي
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -385,7 +382,7 @@ fun HomeScreen(
             }
         }
 
-        // الشبكة الرئيسية للأقسام الأربعة
+        // الشبكة الرئيسية للأقسام
         item {
             Spacer(modifier = Modifier.height(18.dp))
             Text(
@@ -572,7 +569,6 @@ fun SurahIndexScreen(
             .fillMaxSize()
             .background(IvoryBg)
     ) {
-        // شريط علوي
         Surface(color = EmeraldPrimary, shadowElevation = 4.dp) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -765,7 +761,6 @@ fun MushafReaderScreen(
             .fillMaxSize()
             .background(if (settings.nightMushafMode) Color(0xFF101714) else Color(0xFFF6EFE0))
     ) {
-        // شريط معلومات الصفحة العلوي
         Surface(
             color = EmeraldDark,
             shadowElevation = 4.dp
@@ -823,7 +818,6 @@ fun MushafReaderScreen(
             }
         }
 
-        // عارض صفحات المصحف بالتقليب الأفقي (من اليمين لليسار كالمصحف الحقيقي)
         HorizontalPager(
             state = pagerState,
             reverseLayout = true,
@@ -905,7 +899,6 @@ fun MushafReaderScreen(
             }
         }
 
-        // شريط التنقل السفلي بين الصفحات
         Surface(color = EmeraldDark) {
             Row(
                 modifier = Modifier
@@ -962,7 +955,6 @@ fun AudioSurahsScreen(
             .fillMaxSize()
             .background(IvoryBg)
     ) {
-        // الهيدر واختيار القارئ
         Surface(color = EmeraldPrimary, shadowElevation = 4.dp) {
             Column(modifier = Modifier.padding(14.dp)) {
                 Row(
@@ -987,7 +979,6 @@ fun AudioSurahsScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // شريط القراء
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     contentPadding = PaddingValues(horizontal = 4.dp)
@@ -1065,14 +1056,13 @@ fun AudioSurahsScreen(
             }
         }
 
-        // قائمة السور مع حالة التحميل أول مرة فقط
         LazyColumn(
             contentPadding = PaddingValues(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(filteredSurahs, key = { "${selectedReciterId}_${it.number}_$refreshTrigger" }) { surah ->
                 val taskKey = "${selectedReciterId}_${surah.number}"
-                val progress = downloadProgress[taskKey]
+                val progress: Int? = downloadProgress[taskKey]
                 val isDownloaded = remember(selectedReciterId, surah.number, refreshTrigger, progress) {
                     AudioDownloadManager.isSurahDownloaded(context, selectedReciterId, surah.number)
                 }
@@ -1144,7 +1134,6 @@ fun AudioSurahsScreen(
                                 }
                             }
 
-                            // زر التنزيل أول مرة أو أيقونة التشغيل عند الاكتمال
                             when {
                                 progress != null -> {
                                     Surface(
@@ -1210,7 +1199,6 @@ fun AudioSurahsScreen(
                             }
                         }
 
-                        // شريط النسبة المئوية أثناء التنزيل لأول مرة
                         if (progress != null) {
                             Spacer(modifier = Modifier.height(8.dp))
                             LinearProgressIndicator(
@@ -1267,7 +1255,6 @@ fun AudioPlayerScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // الشريط العلوي
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -1302,7 +1289,6 @@ fun AudioPlayerScreen(
             Spacer(modifier = Modifier.size(42.dp))
         }
 
-        // بطاقة صورة الشيخ القارئ واسم السورة
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
                 modifier = Modifier
@@ -1352,7 +1338,6 @@ fun AudioPlayerScreen(
             )
         }
 
-        // شريط التمرير الزمني وأزرار التحكم والتنقل الحديثة
         Column(modifier = Modifier.fillMaxWidth()) {
             val duration = audioState.durationMs.coerceAtLeast(1L)
             val position = audioState.currentPositionMs.coerceIn(0L, duration)
@@ -1386,13 +1371,11 @@ fun AudioPlayerScreen(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // أزرار التنقل مع زر التشغيل/الإيقاف الكبير في الوسط
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                // السورة السابقة
                 IconButton(
                     onClick = {
                         AppPreferences.playTouchSound(view)
@@ -1423,7 +1406,6 @@ fun AudioPlayerScreen(
                     Icon(Icons.Default.SkipPrevious, contentDescription = "السورة السابقة", tint = Color.White, modifier = Modifier.size(28.dp))
                 }
 
-                // ترجيع 10 ثوانٍ
                 IconButton(
                     onClick = {
                         AppPreferences.playTouchSound(view)
@@ -1436,7 +1418,6 @@ fun AudioPlayerScreen(
                     Icon(Icons.Default.Replay10, contentDescription = "ترجيع 10 ثوان", tint = GoldLight, modifier = Modifier.size(26.dp))
                 }
 
-                // زر التشغيل / الإيقاف المؤقت في الوسط
                 IconButton(
                     onClick = {
                         AppPreferences.playTouchSound(view)
@@ -1463,7 +1444,6 @@ fun AudioPlayerScreen(
                     )
                 }
 
-                // تقديم 10 ثوانٍ
                 IconButton(
                     onClick = {
                         AppPreferences.playTouchSound(view)
@@ -1476,7 +1456,6 @@ fun AudioPlayerScreen(
                     Icon(Icons.Default.Forward10, contentDescription = "تقديم 10 ثوان", tint = GoldLight, modifier = Modifier.size(26.dp))
                 }
 
-                // السورة التالية
                 IconButton(
                     onClick = {
                         AppPreferences.playTouchSound(view)
@@ -1508,8 +1487,7 @@ fun AudioPlayerScreen(
                 }
             }
 
-            // مؤشر تحميل السورة المجاورة إن كانت قيد التحميل
-            val activeDownload = downloadProgress.values.firstOrNull()
+            val activeDownload: Int? = downloadProgress.values.firstOrNull()
             if (activeDownload != null) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
@@ -1645,11 +1623,10 @@ fun AdhkarAndTasbihScreen(onBack: () -> Unit) {
     val view = LocalView.current
     val settings by AppPreferences.settings.collectAsState()
 
-    var selectedTab by remember { mutableIntStateOf(0) } // 0 = الأذكار، 1 = المسبحة
+    var selectedTab by remember { mutableIntStateOf(0) }
     var selectedCategory by remember { mutableStateOf("أذكار الصباح") }
     val countsMap = remember { mutableStateMapOf<Int, Int>() }
 
-    // متغيرات المسبحة الإلكترونية
     val tasbihPhrases = listOf(
         "سُبْحَانَ اللَّهِ",
         "الْحَمْدُ لِلَّهِ",
@@ -1725,7 +1702,6 @@ fun AdhkarAndTasbihScreen(onBack: () -> Unit) {
         }
 
         if (selectedTab == 0) {
-            // تبويب الأذكار المطورة
             val categories = listOf("أذكار الصباح", "أذكار المساء", "أذكار بعد الصلاة", "أذكار النوم")
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
@@ -1822,7 +1798,6 @@ fun AdhkarAndTasbihScreen(onBack: () -> Unit) {
                 }
             }
         } else {
-            // تبويب المسبحة الإلكترونية المتطورة
             val animatedProgress by animateFloatAsState(
                 targetValue = ((sessionTasbih % targetGoal).toFloat() / targetGoal.toFloat()).coerceIn(0f, 1f),
                 label = "tasbihProgress"
@@ -1835,7 +1810,6 @@ fun AdhkarAndTasbihScreen(onBack: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                // بطاقة اختيار الذكر والهدف
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
@@ -1909,7 +1883,6 @@ fun AdhkarAndTasbihScreen(onBack: () -> Unit) {
                     }
                 }
 
-                // زر التسبيح الدائري الكبير مع حلقة التقدم الذهبية
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier.size(230.dp)
@@ -1958,7 +1931,6 @@ fun AdhkarAndTasbihScreen(onBack: () -> Unit) {
                     }
                 }
 
-                // زر تصفير العداد الحالي
                 OutlinedButton(
                     onClick = {
                         AppPreferences.playTouchSound(view)
@@ -2126,7 +2098,6 @@ fun SettingsScreen(onBack: () -> Unit) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // بطاقة ملخص الإحصائيات
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -2156,7 +2127,6 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
             }
 
-            // بطاقة التفاعل والصوت
             item {
                 Text("التفاعل والصوت", fontWeight = FontWeight.Bold, color = EmeraldDark, fontSize = 15.sp)
                 Spacer(modifier = Modifier.height(6.dp))
@@ -2191,7 +2161,6 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
             }
 
-            // بطاقة مظهر المصحف والقراءة
             item {
                 Text("المصحف الشريف والقراءة", fontWeight = FontWeight.Bold, color = EmeraldDark, fontSize = 15.sp)
                 Spacer(modifier = Modifier.height(6.dp))
@@ -2226,7 +2195,6 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
             }
 
-            // معلومات الإصدار
             item {
                 Card(
                     shape = RoundedCornerShape(18.dp),
@@ -2240,108 +2208,3 @@ fun SettingsScreen(onBack: () -> Unit) {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
-                            Text("القرآن الكريم - الإصدار الاحترافي", fontWeight = FontWeight.Bold, color = TextDark)
-                            Text("مصحف المدينة المنورة • تلاوات وأحاديث وأذكار", fontSize = 12.sp, color = TextMuted)
-                        }
-                        Surface(color = EmeraldPrimary, shape = RoundedCornerShape(10.dp)) {
-                            Text(
-                                text = "v3.0",
-                                color = GoldLight,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SettingSwitchRow(
-    title: String,
-    subtitle: String,
-    icon: ImageVector,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(IvoryBg, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(icon, contentDescription = null, tint = EmeraldPrimary)
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextDark)
-                Text(subtitle, fontSize = 12.sp, color = TextMuted)
-            }
-        }
-
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = GoldLight,
-                checkedTrackColor = EmeraldPrimary
-            )
-        )
-    }
-}
-
-private fun formatMillis(ms: Long): String {
-    val totalSeconds = (ms / 1000L).coerceAtLeast(0L)
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-    return if (hours > 0) {
-        String.format("%d:%02d:%02d", hours, minutes, seconds)
-    } else {
-        String.format("%02d:%02d", minutes, seconds)
-    }
-}
-
-private fun shareText(context: Context, text: String) {
-    val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_TEXT, text)
-    }
-    context.startActivity(Intent.createChooser(intent, "مشاركة عبر"))
-}
-
-private fun triggerVibration(context: Context, durationMs: Long) {
-    try {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val manager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-            manager.defaultVibrator.vibrate(
-                VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE)
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator.vibrate(durationMs)
-            }
-        }
-    } catch (_: Exception) {
-    }
-}
