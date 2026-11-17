@@ -1,4 +1,4 @@
-name: Build Clean Quran APK
+name: Build Kotlin Quran APK
 
 on:
   push:
@@ -23,12 +23,6 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.7'
-
-      - name: Build Clean Sources
-        run: |
-          rm -rf app/src/main/java/com/quran/app
-          mkdir -p app/src/main/java/com/quran/app
-          python3 scripts/generate_app.py
 
       - name: Build Debug APK
         run: gradle assembleDebug
