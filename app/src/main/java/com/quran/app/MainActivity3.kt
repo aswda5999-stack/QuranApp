@@ -2,51 +2,18 @@
 
 package com.quran.app
 
-import android.Manifest
-import android.annotation.SuppressLint
 import android.app.Activity
-import android.app.AlarmManager
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.app.Service
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.SharedPreferences
-import android.content.pm.PackageManager
-import android.content.pm.ServiceInfo
-import android.location.Location
-import android.location.LocationManager
-import android.media.AudioAttributes
-import android.media.AudioManager
-import android.media.MediaPlayer
-import android.net.Uri
-import android.os.Build
-import android.os.Bundle
-import android.os.IBinder
-import android.os.PowerManager
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
-import android.view.SoundEffectConstants
-import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -62,46 +29,22 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Typography
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateList
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -109,33 +52,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
-import androidx.core.view.WindowCompat
 import coil.compose.SubcomposeAsyncImage
 import coil.imageLoader
 import coil.request.CachePolicy
 import coil.request.ImageRequest
-import java.io.File
-import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
-import java.util.Calendar
 import java.util.Locale
-import java.util.TimeZone
-import kotlin.math.*
-import kotlin.reflect.KProperty
-import kotlinx.coroutines.*
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-
-// ============================================================
 private val InvertMatrix = ColorMatrix(floatArrayOf(-1f, 0f, 0f, 0f, 255f, 0f, -1f, 0f, 0f, 255f, 0f, 0f, -1f, 0f, 255f, 0f, 0f, 0f, 1f, 0f))
 private val WarmMatrix = ColorMatrix(floatArrayOf(1f, 0f, 0f, 0f, 0f, 0f, 0.96f, 0f, 0f, 0f, 0f, 0f, 0.84f, 0f, 0f, 0f, 0f, 0f, 1f, 0f))
 
@@ -175,54 +98,187 @@ fun ReaderScreen(nav: Nav) {
         else -> Color.White
     }
     val surah = QuranData.surahForPage(curPage)
+    val displayPage = sliderDrag?.toInt() ?: curPage
 
     Column(Modifier.fillMaxSize().background(bg)) {
-        AnimatedVisibility(visible = chrome) {
-            Surface(color = RoyalForest, shape = RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp)) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { fx.click(); nav.back() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "رجوع", tint = Color.White) }
-                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("سورة ${surah.name}", color = GoldSoftBg, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
-                        Text("صفحة $curPage • الجزء ${QuranData.juzOfPage(curPage)}", color = Color.White.copy(alpha = 0.8f), fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        // ============================================================
+        // شريط قراءة القرآن العلوي الاحترافي
+        // ============================================================
+        AnimatedVisibility(
+            visible = chrome,
+            enter = slideInVertically { -it } + fadeIn(),
+            exit = slideOutVertically { -it } + fadeOut()
+        ) {
+            Surface(
+                color = RoyalForest,
+                shape = RoundedCornerShape(bottomStart = 26.dp, bottomEnd = 26.dp),
+                border = BorderStroke(1.dp, GoldWarm.copy(alpha = 0.7f)),
+                shadowElevation = 8.dp
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        onClick = { fx.click(); nav.back() },
+                        shape = CircleShape,
+                        color = EmeraldVibrant,
+                        border = BorderStroke(1.dp, GoldWarm.copy(alpha = 0.6f)),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "رجوع", tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
                     }
-                    IconButton(onClick = { fx.click(); st.nightMode = !st.nightMode }) {
-                        Icon(if (st.nightMode) Icons.Default.LightMode else Icons.Default.DarkMode, "الوضع الليلي", tint = GoldShine)
+
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.AutoAwesome, null, tint = GoldShine, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("سورة ${surah.name}", color = GoldSoftBg, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+                        }
+                        Spacer(Modifier.height(2.dp))
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.White.copy(alpha = 0.12f)
+                        ) {
+                            Text(
+                                "صفحة $displayPage / 604  •  الجزء ${QuranData.juzOfPage(displayPage)}",
+                                color = GoldShine,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
+                    Surface(
+                        onClick = { fx.click(); st.nightMode = !st.nightMode },
+                        shape = CircleShape,
+                        color = EmeraldVibrant,
+                        border = BorderStroke(1.dp, GoldWarm.copy(alpha = 0.6f)),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(if (st.nightMode) Icons.Default.LightMode else Icons.Default.DarkMode, "الوضع الليلي", tint = GoldShine, modifier = Modifier.size(20.dp))
+                        }
                     }
                 }
             }
         }
 
+        // صفحات المصحف
         HorizontalPager(state = pagerState, modifier = Modifier.weight(1f).fillMaxWidth()) { idx ->
             Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures(onTap = { chrome = !chrome }) }) {
                 MushafPage(idx + 1, st.nightMode, st.paperWarmth)
             }
         }
 
-        AnimatedVisibility(visible = chrome) {
-            Surface(color = RoyalForest, shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)) {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
-                    Slider(
-                        value = (sliderDrag ?: curPage.toFloat()).coerceIn(1f, 604f),
-                        onValueChange = { sliderDrag = it },
-                        onValueChangeFinished = {
-                            val target = sliderDrag?.toInt() ?: curPage
-                            sliderDrag = null
-                            scope.launch { pagerState.scrollToPage(target.coerceIn(1, 604) - 1) }
-                        },
-                        valueRange = 1f..604f,
-                        colors = SliderDefaults.colors(thumbColor = GoldShine, activeTrackColor = GoldShine, inactiveTrackColor = Color.White.copy(alpha = 0.3f))
-                    )
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround, verticalAlignment = Alignment.CenterVertically) {
-                        ReaderAction(if (st.isFav(curPage)) Icons.Default.Bookmark else Icons.Default.BookmarkBorder, if (st.isFav(curPage)) "محفوظة" else "حفظ") {
+        // ============================================================
+        // شريط التنقل السفلي الاحترافي لقارئ القرآن الكريم
+        // ============================================================
+        AnimatedVisibility(
+            visible = chrome,
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut()
+        ) {
+            Surface(
+                color = RoyalForest,
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                border = BorderStroke(1.3.dp, GoldWarm),
+                shadowElevation = 12.dp
+            ) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)) {
+                    // شريط تمرير الصفحات مع أزرار الصفحة السابقة والتالية
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        IconButton(
+                            onClick = {
+                                fx.click()
+                                if (curPage < 604) scope.launch { pagerState.animateScrollToPage(curPage) }
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.ChevronRight, "الصفحة التالية", tint = GoldShine)
+                        }
+
+                        Slider(
+                            value = (sliderDrag ?: curPage.toFloat()).coerceIn(1f, 604f),
+                            onValueChange = { sliderDrag = it },
+                            onValueChangeFinished = {
+                                val target = sliderDrag?.toInt() ?: curPage
+                                sliderDrag = null
+                                scope.launch { pagerState.scrollToPage(target.coerceIn(1, 604) - 1) }
+                            },
+                            valueRange = 1f..604f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = GoldShine,
+                                activeTrackColor = GoldShine,
+                                inactiveTrackColor = Color.White.copy(alpha = 0.25f)
+                            ),
+                            modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
+                        )
+
+                        IconButton(
+                            onClick = {
+                                fx.click()
+                                if (curPage > 1) scope.launch { pagerState.animateScrollToPage(curPage - 2) }
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.ChevronLeft, "الصفحة السابقة", tint = GoldShine)
+                        }
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+
+                    // أزرار التحكم السريعة لقارئ المصحف (5 أزرار متناسقة)
+                    Row(
+                        Modifier.fillMaxWidth().padding(bottom = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val isSaved = st.isFav(curPage)
+                        ProReaderNavButton(
+                            icon = if (isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                            label = if (isSaved) "محفوظة" else "المفضلة",
+                            active = isSaved
+                        ) {
                             fx.click(); st.toggleFav(curPage)
                         }
-                        ReaderAction(Icons.Default.Search, "اذهب لصفحة") { fx.click(); showJump = true }
-                        ReaderAction(Icons.Default.Headphones, "استمع للسورة") {
+
+                        ProReaderNavButton(
+                            icon = Icons.Default.FormatListNumbered,
+                            label = "الفهرس",
+                            active = false
+                        ) {
+                            fx.click(); nav.push(Screen.Index)
+                        }
+
+                        ProReaderNavButton(
+                            icon = Icons.Default.MyLocation,
+                            label = "انتقال",
+                            active = false
+                        ) {
+                            fx.click(); showJump = true
+                        }
+
+                        ProReaderNavButton(
+                            icon = Icons.Default.Headphones,
+                            label = "استماع",
+                            active = false
+                        ) {
                             fx.click()
                             PlayerService.play(ctx, st.reciterId, surah.num)
                             nav.push(Screen.Audio)
                         }
-                        ReaderAction(Icons.Default.Home, "الرئيسية") { fx.click(); nav.go(Screen.Home) }
+
+                        ProReaderNavButton(
+                            icon = Icons.Default.Home,
+                            label = "الرئيسية",
+                            active = false
+                        ) {
+                            fx.click(); nav.go(Screen.Home)
+                        }
                     }
                 }
             }
@@ -256,10 +312,18 @@ fun ReaderScreen(nav: Nav) {
 }
 
 @Composable
-private fun ReaderAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        IconButton(onClick = onClick, modifier = Modifier.size(38.dp)) { Icon(icon, label, tint = GoldShine, modifier = Modifier.size(22.dp)) }
-        Text(label, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold)
+private fun ProReaderNavButton(icon: ImageVector, label: String, active: Boolean, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (active) TurquoiseAccent else EmeraldVibrant.copy(alpha = 0.65f))
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+    ) {
+        Icon(icon, label, tint = if (active) GoldShine else GoldSoftBg, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.height(2.dp))
+        Text(label, color = if (active) GoldShine else Color.White, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
     }
 }
 
@@ -381,9 +445,6 @@ fun IndexScreen(nav: Nav) {
     }
 }
 
-// ============================================================
-// ui/AudioScreen.kt
-// ============================================================
 private fun fmtMs(ms: Int): String {
     val s = (ms / 1000).coerceAtLeast(0)
     return String.format(Locale.US, "%02d:%02d", s / 60, s % 60)
@@ -423,7 +484,6 @@ fun AudioScreen(nav: Nav) {
             }
         }
 
-        // ---------- بطاقة المشغل ----------
         Surface(
             shape = RoundedCornerShape(24.dp), color = RoyalForest, border = BorderStroke(1.5.dp, GoldWarm),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp)
@@ -432,7 +492,6 @@ fun AudioScreen(nav: Nav) {
                 Text(nowSurah?.let { "سورة ${it.name}" } ?: "اختر سورة لبدء التلاوة", color = GoldSoftBg, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                 Text(if (nowSurah != null) "${nowReciter.name} • ${nowReciter.style}" else "${reciter.name} • ${reciter.style}", color = Color.White.copy(alpha = 0.85f), fontWeight = FontWeight.Bold, fontSize = 11.sp)
 
-                // عناصر التحكم تبقى بترتيب عالمي (يسار → يمين)
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                     Column(Modifier.fillMaxWidth()) {
                         val frac = drag ?: if (ps.durationMs > 0) ps.positionMs / ps.durationMs.toFloat() else 0f
@@ -556,7 +615,7 @@ fun AudioScreen(nav: Nav) {
 }
 
 @Composable
-private fun ModeButton(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, active: Boolean, onClick: () -> Unit) {
+private fun ModeButton(label: String, icon: ImageVector, active: Boolean, onClick: () -> Unit) {
     val fx = LocalFx.current
     TextButton(onClick = { fx.click(); onClick() }) {
         Icon(icon, null, tint = if (active) GoldShine else Color.White.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
@@ -565,9 +624,6 @@ private fun ModeButton(label: String, icon: androidx.compose.ui.graphics.vector.
     }
 }
 
-// ============================================================
-// ui/TasbihScreen.kt
-// ============================================================
 @Composable
 fun TasbihScreen(nav: Nav) {
     val fx = LocalFx.current
@@ -753,7 +809,3 @@ private fun AdhkarList() {
         }
     }
 }
-
-// ============================================================
-// ui/MoreScreens.kt
-// ============================================================
