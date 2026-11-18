@@ -1,142 +1,31 @@
-@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
-
 package com.quran.app
 
-import android.Manifest
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.app.AlarmManager
-import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
-import android.content.pm.PackageManager
-import android.content.pm.ServiceInfo
 import android.location.Location
 import android.location.LocationManager
-import android.media.AudioAttributes
-import android.media.AudioManager
-import android.media.MediaPlayer
-import android.net.Uri
 import android.os.Build
-import android.os.Bundle
-import android.os.IBinder
-import android.os.PowerManager
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
-import android.view.SoundEffectConstants
-import android.view.View
-import android.view.WindowManager
-import android.widget.Toast
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Typography
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
-import androidx.compose.runtime.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateList
-import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
-import androidx.core.view.WindowCompat
-import coil.compose.SubcomposeAsyncImage
-import coil.imageLoader
-import coil.request.CachePolicy
-import coil.request.ImageRequest
-import java.io.File
-import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
 import kotlin.math.*
 import kotlin.reflect.KProperty
-import kotlinx.coroutines.*
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
-
 
 // ============================================================
-// data/QuranData.kt
+// نماذج البيانات الأساسية
 // ============================================================
 data class Surah(val num: Int, val name: String, val type: String, val ayahs: Int, val page: Int)
 data class Reciter(val id: String, val name: String, val style: String, val url: String)
@@ -145,15 +34,14 @@ data class DhikrItem(val title: String, val text: String, val target: Int)
 data class TasbihStage(val phrase: String, val subtitle: String, val defaultTarget: Int)
 data class DailyVerse(val text: String, val ref: String, val page: Int)
 data class City(val name: String, val lat: Double, val lng: Double)
+data class HifzQuizItem(val question: String, val options: List<String>, val correctIndex: Int, val surahRef: String)
 
-/** يوحّد الحروف العربية للبحث (إزالة التشكيل وتوحيد الألف والياء والهاء). */
 fun String.normalizeAr(): String = this.trim()
     .replace(Regex("[\\u064B-\\u065F\\u0670\\u0640]"), "")
     .replace('أ', 'ا').replace('إ', 'ا').replace('آ', 'ا').replace('ٱ', 'ا')
     .replace('ى', 'ي').replace('ة', 'ه')
 
 object QuranData {
-    // ضع روابط قنواتك الحقيقية هنا
     const val YOUTUBE_URL = "https://www.youtube.com"
     const val TELEGRAM_URL = "https://t.me"
 
@@ -166,7 +54,6 @@ object QuranData {
         TasbihStage("اللَّهُمَّ صَلِّ وَسَلِّمْ عَلَى نَبِيِّنَا مُحَمَّدٍ", "الصلاة على رسول الله ﷺ", 10)
     )
 
-    // 15 قارئاً مشهوراً. روابط البث هي قواعد MP3Quran؛ قد يختلف توفر بعض السيرفرات.
     val reciters = listOf(
         Reciter("afs", "مشاري العفاسي", "مرتل • حفص", "https://server8.mp3quran.net/afs"),
         Reciter("basit", "عبد الباسط عبد الصمد", "مجود • حفص", "https://server7.mp3quran.net/basit"),
@@ -226,13 +113,9 @@ object QuranData {
         Surah(112,"الإخلاص","مكية",4,604), Surah(113,"الفلق","مكية",5,604), Surah(114,"الناس","مكية",6,604)
     )
 
-    /** أول صفحة لكل جزء (30 جزءاً). */
     val juzStart: List<Int> = List(30) { if (it == 0) 1 else 2 + 20 * it }
-
     fun juzOfPage(page: Int): Int = if (page <= 21) 1 else ((page - 2) / 20 + 1).coerceAtMost(30)
-
     fun surahForPage(page: Int): Surah = surahs.lastOrNull { it.page <= page } ?: surahs.first()
-
     fun surah(num: Int): Surah? = surahs.firstOrNull { it.num == num }
 
     fun search(q: String): List<Surah> {
@@ -266,21 +149,29 @@ object QuranData {
         DhikrItem("الصلاة على النبي ﷺ", "اللَّهُمَّ صَلِّ وَسَلِّمْ وَبَارِكْ عَلَى نَبِيِّنَا مُحَمَّدٍ", 10)
     )
 
+    val hifzQuizzes = listOf(
+        HifzQuizItem("أكمل الآية: ﴿ إِنَّا أَعْطَيْنَاكَ ... ﴾", listOf("الْكَوْثَرَ", "الْحِكْمَةَ", "الْفُرْقَانَ"), 0, "سورة الكوثر"),
+        HifzQuizItem("أكمل الآية: ﴿ قُلْ هُوَ اللَّهُ ... ﴾", listOf("الصَّمَدُ", "أَحَدٌ", "الْوَاحِدُ"), 1, "سورة الإخلاص"),
+        HifzQuizItem("أكمل الآية: ﴿ وَالْعَصْرِ * إِنَّ الْإِنسَانَ لَفِي ... ﴾", listOf("ضَلَالٍ", "خُسْرٍ", "غَفْلَةٍ"), 1, "سورة العصر"),
+        HifzQuizItem("أكمل الآية: ﴿ أَلَمْ نَشْرَحْ لَكَ ... ﴾", listOf("قَلْبَكَ", "صَدْرَكَ", "أَمْرَكَ"), 1, "سورة الشرح"),
+        HifzQuizItem("أكمل الآية: ﴿ سَبِّحِ اسْمَ رَبِّكَ ... ﴾", listOf("الْعَظِيمِ", "الْكَرِيمِ", "الْأَعْلَى"), 2, "سورة الأعلى")
+    )
+
     val cities = listOf(
         City("القدس", 31.7683, 35.2137), City("غزة", 31.5017, 34.4668), City("رام الله", 31.9038, 35.2034),
-        City("عمّان", 31.9454, 35.9284), City("دمشق", 33.5138, 36.2765), City("بيروت", 33.8938, 35.5018),
-        City("بغداد", 33.3152, 44.3661), City("القاهرة", 30.0444, 31.2357), City("الرياض", 24.7136, 46.6753),
-        City("مكة المكرمة", 21.4225, 39.8262), City("المدينة المنورة", 24.4686, 39.6142), City("دبي", 25.2048, 55.2708),
-        City("الدوحة", 25.2854, 51.5310), City("الكويت", 29.3759, 47.9774), City("إسطنبول", 41.0082, 28.9784),
-        City("الدار البيضاء", 33.5731, -7.5898), City("الجزائر", 36.7538, 3.0588), City("تونس", 36.8065, 10.1815),
-        City("الخرطوم", 15.5007, 32.5599), City("صنعاء", 15.3694, 44.1910)
+        City("عمّان", 31.9454, 35.9284), City("دمشق", 33.5138, 36.2765), City("حلب", 36.2021, 37.1343),
+        City("بيروت", 33.8938, 35.5018), City("بغداد", 33.3152, 44.3661), City("القاهرة", 30.0444, 31.2357),
+        City("الرياض", 24.7136, 46.6753), City("مكة المكرمة", 21.4225, 39.8262), City("المدينة المنورة", 24.4686, 39.6142),
+        City("دبي", 25.2048, 55.2708), City("الدوحة", 25.2854, 51.5310), City("الكويت", 29.3759, 47.9774),
+        City("إسطنبول", 41.0082, 28.9784), City("الدار البيضاء", 33.5731, -7.5898), City("الجزائر", 36.7538, 3.0588),
+        City("تونس", 36.8065, 10.1815), City("الخرطوم", 15.5007, 32.5599), City("صنعاء", 15.3694, 44.1910)
     )
 
     fun pageUrl(page: Int) = "https://android.quran.com/data/width_1024/page${page.toString().padStart(3, '0')}.png"
 }
 
 // ============================================================
-// data/AppState.kt
+// حالة التطبيق (AppState)
 // ============================================================
 const val PREFS_NAME = "quran_royal_v7"
 
@@ -319,7 +210,6 @@ class AppState(ctx: Context) {
     private val app = ctx.applicationContext
     val sp: SharedPreferences = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    // الإعدادات
     var nightMode by PrefBool(sp, "night_mode", false)
     var paperWarmth by PrefBool(sp, "paper_warmth", true)
     var soundOn by PrefBool(sp, "sound_on", true)
@@ -335,10 +225,10 @@ class AppState(ctx: Context) {
     var reciterId by PrefString(sp, "reciter_id", "afs")
     var askedNotif by PrefBool(sp, "asked_notif", false)
 
-    // التقدم والإحصائيات
     var lastPage by PrefInt(sp, "last_page", 1)
     var totalTasbih by PrefInt(sp, "total_tasbih", 0)
     var streak by PrefInt(sp, "streak", 0)
+    var hifzNote by PrefString(sp, "hifz_note", "")
     private var lastReadDay by PrefInt(sp, "last_read_day", 0)
     private var todayDay by PrefInt(sp, "today_day", 0)
     private var todayCount by PrefInt(sp, "today_count", 0)
@@ -346,6 +236,8 @@ class AppState(ctx: Context) {
     var readPages by mutableStateOf(parseSet(sp.getString("read_pages", "")))
         private set
     var favPages by mutableStateOf(parseSet(sp.getString("fav_pages", "")))
+        private set
+    var memorizedSurahs by mutableStateOf(parseSet(sp.getString("memorized_surahs", "")))
         private set
     var geo by mutableStateOf(sp.geoLoc())
         private set
@@ -357,7 +249,6 @@ class AppState(ctx: Context) {
 
     fun todayPages(): Int = if (todayDay == dayKey()) todayCount else 0
 
-    /** تُستدعى عند فتح المصحف (counted=false) أو عند الانتقال لصفحة جديدة (counted=true). */
     fun onPageViewed(page: Int, counted: Boolean) {
         lastPage = page
         if (page !in readPages) {
@@ -381,6 +272,11 @@ class AppState(ctx: Context) {
         sp.edit().putString("fav_pages", favPages.joinToString(",")).apply()
     }
 
+    fun toggleMemorizedSurah(surahNum: Int) {
+        memorizedSurahs = if (surahNum in memorizedSurahs) memorizedSurahs - surahNum else memorizedSurahs + surahNum
+        sp.edit().putString("memorized_surahs", memorizedSurahs.joinToString(",")).apply()
+    }
+
     fun khatmaPercent(): Int = (readPages.size * 100 / 604).coerceIn(0, 100)
 
     fun setLocation(name: String, lat: Double, lng: Double) {
@@ -397,13 +293,11 @@ class AppState(ctx: Context) {
 }
 
 // ============================================================
-// util/PrayerCalc.kt
+// حسابات الصلاة والقبلة (PrayerCalc)
 // ============================================================
 object PrayerCalc {
     val names = listOf("الفجر", "الظهر", "العصر", "المغرب", "العشاء")
     val methodNames = listOf("رابطة العالم الإسلامي", "الهيئة المصرية العامة للمساحة", "أم القرى - مكة المكرمة")
-
-    /** فهارس الصلوات الخمس داخل مصفوفة millis: [فجر، شروق، ظهر، عصر، مغرب، عشاء] */
     val prayerIdx = intArrayOf(0, 2, 3, 4, 5)
 
     private fun rad(d: Double) = Math.toRadians(d)
@@ -418,7 +312,6 @@ object PrayerCalc {
         return floor(365.25 * (y + 4716)) + floor(30.6001 * (m + 1)) + day + b - 1524.5
     }
 
-    /** (الميل الشمسي، معادلة الزمن) */
     private fun sun(jd: Double): Pair<Double, Double> {
         val d = jd - 2451545.0
         val g = fix(357.529 + 0.98560028 * d, 360.0)
@@ -434,7 +327,6 @@ object PrayerCalc {
     fun tzFor(geo: GeoLoc): TimeZone =
         if (geo.isDefault) TimeZone.getTimeZone("GMT+03:00") else TimeZone.getDefault()
 
-    /** أوقات اليوم بالمللي ثانية: [فجر، شروق، ظهر، عصر، مغرب، عشاء] (0 إذا تعذر الحساب). */
     fun millis(geo: GeoLoc, method: Int, dayOffset: Int): LongArray {
         val tz = tzFor(geo)
         val cal = Calendar.getInstance(tz)
@@ -477,7 +369,6 @@ object PrayerCalc {
         }.toLongArray()
     }
 
-    /** الصلاة القادمة: (رقمها 0..4، وقتها بالمللي ثانية). */
     fun nextPrayer(geo: GeoLoc, method: Int, now: Long): Pair<Int, Long> {
         for (d in 0..1) {
             val t = millis(geo, method, d)
@@ -502,7 +393,6 @@ object PrayerCalc {
         return String.format(Locale.US, "%02d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60)
     }
 
-    /** اتجاه القبلة بالدرجات من الشمال الحقيقي (باتجاه عقارب الساعة). */
     fun qibla(lat: Double, lng: Double): Double {
         val kLat = rad(21.4225); val kLng = rad(39.8262)
         val p1 = rad(lat); val dl = kLng - rad(lng)
@@ -523,7 +413,7 @@ object LocationHelper {
 }
 
 // ============================================================
-// util/Reminders.kt
+// الإشعارات والتذكيرات (Notifs & Reminders)
 // ============================================================
 object Notifs {
     const val CH_PLAYER = "quran_player_v1"
@@ -579,7 +469,6 @@ object Reminders {
         return c.timeInMillis
     }
 
-    /** يعيد جدولة كل التذكيرات حسب الإعدادات الحالية. */
     fun rescheduleAll(ctx: Context) {
         val app = ctx.applicationContext
         val sp = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -632,358 +521,3 @@ class BootReceiver : BroadcastReceiver() {
         }
     }
 }
-
-// ============================================================
-// audio/PlayerService.kt
-// ============================================================
-data class PlayerState(
-    val reciterId: String = "afs",
-    val surah: Int = 0,
-    val isPlaying: Boolean = false,
-    val isLoading: Boolean = false,
-    val positionMs: Int = 0,
-    val durationMs: Int = 0,
-    val repeatOne: Boolean = false,
-    val autoNext: Boolean = true,
-    val sleepLeft: Int = 0,
-    val downloads: Map<String, Float> = emptyMap(),
-    val error: String? = null,
-    val cacheVersion: Int = 0
-)
-
-object AudioCache {
-    fun dir(ctx: Context): File = File(ctx.filesDir, "audio").apply { mkdirs() }
-    fun file(ctx: Context, reciterId: String, num: Int) = File(dir(ctx), "${reciterId}_$num.mp3")
-    fun has(ctx: Context, reciterId: String, num: Int): Boolean = file(ctx, reciterId, num).let { it.exists() && it.length() > 1000 }
-    fun count(ctx: Context): Int = dir(ctx).listFiles()?.count { it.name.endsWith(".mp3") } ?: 0
-    fun sizeMb(ctx: Context): Long = (dir(ctx).listFiles()?.sumOf { it.length() } ?: 0L) / (1024 * 1024)
-    fun clear(ctx: Context) { dir(ctx).listFiles()?.forEach { it.delete() } }
-}
-
-class PlayerService : Service() {
-
-    companion object {
-        private const val NOTIF_ID = 77
-        private const val A_PLAY = "com.quran.app.PLAY"
-        private const val A_TOGGLE = "com.quran.app.TOGGLE"
-        private const val A_STOP = "com.quran.app.STOP"
-        private const val A_NEXT = "com.quran.app.NEXT"
-        private const val A_PREV = "com.quran.app.PREV"
-        private const val A_SEEK = "com.quran.app.SEEK"
-        private const val A_SEEK_BY = "com.quran.app.SEEK_BY"
-        private const val A_REPEAT = "com.quran.app.REPEAT"
-        private const val A_AUTONEXT = "com.quran.app.AUTONEXT"
-        private const val A_SLEEP = "com.quran.app.SLEEP"
-        private const val A_DOWNLOAD = "com.quran.app.DOWNLOAD"
-        private const val A_DELETE = "com.quran.app.DELETE"
-
-        private val _state = MutableStateFlow(PlayerState())
-        val state: StateFlow<PlayerState> = _state.asStateFlow()
-
-        private fun intent(ctx: Context, action: String) = Intent(ctx, PlayerService::class.java).setAction(action)
-
-        private fun cmd(ctx: Context, i: Intent) { runCatching { ctx.startService(i) } }
-
-        fun play(ctx: Context, reciterId: String, surah: Int) {
-            runCatching {
-                ContextCompat.startForegroundService(ctx, intent(ctx, A_PLAY).putExtra("r", reciterId).putExtra("s", surah))
-            }
-        }
-        fun download(ctx: Context, reciterId: String, surah: Int) {
-            runCatching {
-                ContextCompat.startForegroundService(ctx, intent(ctx, A_DOWNLOAD).putExtra("r", reciterId).putExtra("s", surah))
-            }
-        }
-        fun delete(ctx: Context, reciterId: String, surah: Int) {
-            AudioCache.file(ctx, reciterId, surah).delete()
-            bump()
-        }
-        fun clearAll(ctx: Context) { AudioCache.clear(ctx); bump() }
-        fun toggle(ctx: Context) = cmd(ctx, intent(ctx, A_TOGGLE))
-        fun next(ctx: Context) = cmd(ctx, intent(ctx, A_NEXT))
-        fun prev(ctx: Context) = cmd(ctx, intent(ctx, A_PREV))
-        fun stop(ctx: Context) = cmd(ctx, intent(ctx, A_STOP))
-        fun seek(ctx: Context, ms: Int) = cmd(ctx, intent(ctx, A_SEEK).putExtra("ms", ms))
-        fun seekBy(ctx: Context, deltaMs: Int) = cmd(ctx, intent(ctx, A_SEEK_BY).putExtra("d", deltaMs))
-        fun toggleRepeat(ctx: Context) = cmd(ctx, intent(ctx, A_REPEAT))
-        fun toggleAutoNext(ctx: Context) = cmd(ctx, intent(ctx, A_AUTONEXT))
-        fun setSleep(ctx: Context, minutes: Int) = cmd(ctx, intent(ctx, A_SLEEP).putExtra("m", minutes))
-        fun clearError() { _state.update { it.copy(error = null) } }
-        private fun bump() { _state.update { it.copy(cacheVersion = it.cacheVersion + 1) } }
-    }
-
-    private var mp: MediaPlayer? = null
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private var ticker: Job? = null
-    private var sleepJob: Job? = null
-    private val dl = mutableMapOf<String, Job>()
-    private lateinit var audioManager: AudioManager
-
-    private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
-        if (change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) pause()
-    }
-
-    override fun onCreate() {
-        super.onCreate()
-        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        Notifs.ensureChannels(this)
-    }
-
-    override fun onBind(intent: Intent?): IBinder? = null
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            A_PLAY -> playSurah(intent.getStringExtra("r") ?: _state.value.reciterId, intent.getIntExtra("s", 1))
-            A_DOWNLOAD -> startDownload(intent.getStringExtra("r") ?: _state.value.reciterId, intent.getIntExtra("s", 1))
-            A_TOGGLE -> toggle()
-            A_STOP -> stopAll()
-            A_NEXT -> { val s = _state.value; if (s.surah in 1..113) playSurah(s.reciterId, s.surah + 1) }
-            A_PREV -> { val s = _state.value; if (s.surah > 1) playSurah(s.reciterId, s.surah - 1) }
-            A_SEEK -> seekTo(intent.getIntExtra("ms", 0))
-            A_SEEK_BY -> mp?.let { seekTo(runCatching { it.currentPosition }.getOrDefault(0) + intent.getIntExtra("d", 0)) }
-            A_REPEAT -> _state.update { it.copy(repeatOne = !it.repeatOne) }
-            A_AUTONEXT -> _state.update { it.copy(autoNext = !it.autoNext) }
-            A_SLEEP -> setSleep(intent.getIntExtra("m", 0))
-        }
-        // إن بدأت الخدمة بـ startForegroundService ولم نبدأ تشغيلاً/تنزيلاً يجب إيقافها
-        if (mp == null && dl.isEmpty()) maybeStop()
-        return START_NOT_STICKY
-    }
-
-    // ---------- التشغيل ----------
-
-    private fun urlOf(r: Reciter, num: Int) = "${r.url}/${num.toString().padStart(3, '0')}.mp3"
-
-    private fun playSurah(reciterId: String, num: Int) {
-        val reciter = QuranData.reciters.firstOrNull { it.id == reciterId } ?: return
-        releasePlayer()
-        _state.update {
-            it.copy(reciterId = reciterId, surah = num, isLoading = true, isPlaying = false, positionMs = 0, durationMs = 0, error = null)
-        }
-        goForeground()
-        runCatching { @Suppress("DEPRECATION") audioManager.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN) }
-
-        val file = AudioCache.file(this, reciterId, num)
-        val p = MediaPlayer()
-        mp = p
-        try {
-            p.setAudioAttributes(AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).setUsage(AudioAttributes.USAGE_MEDIA).build())
-            p.setWakeMode(applicationContext, PowerManager.PARTIAL_WAKE_LOCK)
-            if (file.exists() && file.length() > 1000) p.setDataSource(file.absolutePath) else p.setDataSource(urlOf(reciter, num))
-            p.setOnPreparedListener { m ->
-                m.start()
-                _state.update { it.copy(isLoading = false, isPlaying = true, durationMs = runCatching { m.duration }.getOrDefault(0)) }
-                startTicker(); goForeground()
-            }
-            p.setOnCompletionListener { onComplete() }
-            p.setOnErrorListener { _, _, _ -> fail("تعذر تشغيل السورة، تحقق من اتصال الإنترنت"); true }
-            p.prepareAsync()
-        } catch (e: Exception) {
-            fail("تعذر تشغيل السورة، تحقق من اتصال الإنترنت")
-        }
-    }
-
-    private fun fail(msg: String) {
-        releasePlayer()
-        _state.update { it.copy(isLoading = false, isPlaying = false, error = msg) }
-        goForeground()
-    }
-
-    private fun onComplete() {
-        val s = _state.value
-        when {
-            s.repeatOne -> { mp?.seekTo(0); mp?.start() }
-            s.autoNext && s.surah < 114 -> playSurah(s.reciterId, s.surah + 1)
-            else -> { _state.update { it.copy(isPlaying = false, positionMs = 0) }; goForeground() }
-        }
-    }
-
-    private fun toggle() {
-        val s = _state.value
-        val p = mp
-        when {
-            s.isLoading -> Unit
-            p != null && s.isPlaying -> pause()
-            p != null -> {
-                runCatching { audioManager.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN) }
-                runCatching { p.start() }
-                _state.update { it.copy(isPlaying = true) }
-                startTicker(); goForeground()
-            }
-            s.surah > 0 -> playSurah(s.reciterId, s.surah)
-        }
-    }
-
-    private fun pause() {
-        runCatching { mp?.pause() }
-        _state.update { it.copy(isPlaying = false) }
-        goForeground()
-    }
-
-    private fun seekTo(ms: Int) {
-        val p = mp ?: return
-        val dur = _state.value.durationMs.coerceAtLeast(1)
-        val t = ms.coerceIn(0, dur)
-        runCatching { p.seekTo(t) }
-        _state.update { it.copy(positionMs = t) }
-    }
-
-    private fun startTicker() {
-        ticker?.cancel()
-        ticker = scope.launch {
-            while (true) {
-                val p = mp
-                if (p != null && _state.value.isPlaying) {
-                    runCatching {
-                        val pos = p.currentPosition
-                        val dur = p.duration.coerceAtLeast(0)
-                        _state.update { it.copy(positionMs = pos, durationMs = dur) }
-                    }
-                }
-                delay(400)
-            }
-        }
-    }
-
-    private fun setSleep(minutes: Int) {
-        sleepJob?.cancel()
-        _state.update { it.copy(sleepLeft = minutes) }
-        if (minutes <= 0) return
-        sleepJob = scope.launch {
-            var left = minutes
-            while (left > 0) {
-                delay(60_000L)
-                left--
-                _state.update { it.copy(sleepLeft = left) }
-            }
-            pause()
-        }
-    }
-
-    private fun releasePlayer() {
-        ticker?.cancel()
-        runCatching { mp?.reset(); mp?.release() }
-        mp = null
-    }
-
-    private fun stopAll() {
-        releasePlayer()
-        sleepJob?.cancel()
-        runCatching { @Suppress("DEPRECATION") audioManager.abandonAudioFocus(focusListener) }
-        _state.update { it.copy(surah = 0, isPlaying = false, isLoading = false, positionMs = 0, durationMs = 0, sleepLeft = 0) }
-        maybeStop()
-    }
-
-    private fun maybeStop() {
-        if (mp == null && dl.isEmpty()) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
-        }
-    }
-
-    // ---------- التنزيل ----------
-
-    private fun startDownload(reciterId: String, num: Int) {
-        val reciter = QuranData.reciters.firstOrNull { it.id == reciterId } ?: return
-        val key = "${reciterId}_$num"
-        if (dl.containsKey(key) || AudioCache.has(this, reciterId, num)) return
-        goForeground()
-        _state.update { it.copy(downloads = it.downloads + (key to 0f), error = null) }
-        dl[key] = scope.launch {
-            val ok = withContext(Dispatchers.IO) { downloadFile(reciter, num, key) }
-            dl.remove(key)
-            _state.update {
-                it.copy(
-                    downloads = it.downloads - key,
-                    cacheVersion = it.cacheVersion + 1,
-                    error = if (ok) null else "تعذر تنزيل السورة، تحقق من اتصال الإنترنت"
-                )
-            }
-            if (mp == null && dl.isEmpty()) maybeStop()
-        }
-    }
-
-    private fun downloadFile(reciter: Reciter, num: Int, key: String): Boolean {
-        val out = AudioCache.file(this, reciter.id, num)
-        val part = File(out.path + ".part")
-        var conn: HttpURLConnection? = null
-        return try {
-            conn = (URL(urlOf(reciter, num)).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 15_000; readTimeout = 20_000; instanceFollowRedirects = true
-            }
-            if (conn.responseCode !in 200..299) {
-                false
-            } else {
-                val total = conn.contentLengthLong
-                conn.inputStream.use { input ->
-                    FileOutputStream(part).use { output ->
-                        val buf = ByteArray(32 * 1024)
-                        var done = 0L
-                        var last = -1
-                        while (true) {
-                            val read = input.read(buf)
-                            if (read == -1) break
-                            output.write(buf, 0, read)
-                            done += read
-                            if (total > 0) {
-                                val pct = (done * 100 / total).toInt()
-                                if (pct != last) {
-                                    last = pct
-                                    _state.update { it.copy(downloads = it.downloads + (key to pct / 100f)) }
-                                }
-                            }
-                        }
-                    }
-                }
-                out.delete()
-                part.renameTo(out)
-            }
-        } catch (e: Exception) {
-            part.delete()
-            false
-        } finally {
-            conn?.disconnect()
-        }
-    }
-
-    // ---------- الإشعار ----------
-
-    private fun actionPi(action: String, code: Int): PendingIntent =
-        PendingIntent.getService(this, code, Intent(this, PlayerService::class.java).setAction(action),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-
-    private fun buildNotification(): Notification {
-        val s = _state.value
-        val surah = QuranData.surah(s.surah)
-        val reciter = QuranData.reciters.firstOrNull { it.id == s.reciterId }?.name ?: ""
-        val b = NotificationCompat.Builder(this, Notifs.CH_PLAYER)
-            .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle(if (surah != null) "سورة ${surah.name}" else "تنزيل التلاوات")
-            .setContentText(if (surah != null) reciter else "جارٍ التنزيل...")
-            .setContentIntent(Notifs.contentIntent(this))
-            .setOngoing(s.isPlaying || s.downloads.isNotEmpty())
-            .setOnlyAlertOnce(true)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-        if (surah != null) {
-            b.addAction(
-                if (s.isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-                if (s.isPlaying) "إيقاف مؤقت" else "تشغيل", actionPi(A_TOGGLE, 1)
-            )
-            b.addAction(android.R.drawable.ic_menu_close_clear_cancel, "إغلاق", actionPi(A_STOP, 2))
-        }
-        return b.build()
-    }
-
-    private fun goForeground() {
-        val n = buildNotification()
-        if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
-        else startForeground(NOTIF_ID, n)
-    }
-
-    override fun onDestroy() {
-        releasePlayer()
-        scope.cancel()
-        super.onDestroy()
-    }
-}
-
