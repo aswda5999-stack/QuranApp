@@ -33,8 +33,8 @@ jobs:
         run: |
           NEW_CODE=$((100 + ${{ github.run_number }}))
           if [ -f "app/build.gradle.kts" ]; then
-            sed -i "s/versionCode = [0-9]*/versionCode = $NEW_CODE/g" app/build/gradle.kts
-            sed -i "s/versionName = \".*\"/versionName = \"1.0.$NEW_CODE\"/g" app/build/gradle.kts
+            sed -i "s/versionCode = [0-9]*/versionCode = $NEW_CODE/g" app/build.gradle.kts
+            sed -i "s/versionName = \".*\"/versionName = \"1.0.$NEW_CODE\"/g" app/build.gradle.kts
           elif [ -f "app/build.gradle" ]; then
             sed -i "s/versionCode [0-9]*/versionCode $NEW_CODE/g" app/build.gradle
             sed -i "s/versionName \".*\"/versionName \"1.0.$NEW_CODE\"/g" app/build.gradle
