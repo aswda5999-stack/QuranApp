@@ -54,22 +54,41 @@ object QuranData {
         TasbihStage("اللَّهُمَّ صَلِّ وَسَلِّمْ عَلَى نَبِيِّنَا مُحَمَّدٍ", "الصلاة على رسول الله ﷺ", 10)
     )
 
+    // 30 قارئاً من أشهر قراء العالم الإسلامي بروابط بث مباشرة ومستقرة
     val reciters = listOf(
-        Reciter("afs", "مشاري العفاسي", "مرتل • حفص", "https://server8.mp3quran.net/afs"),
-        Reciter("basit", "عبد الباسط عبد الصمد", "مجود • حفص", "https://server7.mp3quran.net/basit"),
-        Reciter("maher", "ماهر المعيقلي", "مرتل • حفص", "https://server12.mp3quran.net/maher"),
-        Reciter("yasser", "ياسر الدوسري", "مرتل • حفص", "https://server11.mp3quran.net/yasser"),
-        Reciter("minsh", "محمد صديق المنشاوي", "مرتل • حفص", "https://server10.mp3quran.net/minsh"),
-        Reciter("sudais", "عبد الرحمن السديس", "مرتل • حفص", "https://server11.mp3quran.net/sds"),
-        Reciter("shur", "سعود الشريم", "مرتل • حفص", "https://server11.mp3quran.net/shur"),
-        Reciter("ajm", "أحمد العجمي", "مرتل • حفص", "https://server6.mp3quran.net/ajm"),
-        Reciter("husr", "محمود خليل الحصري", "مرتل • حفص", "https://server5.mp3quran.net/husr"),
-        Reciter("ghamdi", "سعد الغامدي", "مرتل • حفص", "https://server11.mp3quran.net/ghamdi"),
-        Reciter("hud", "علي الحذيفي", "مرتل • حفص", "https://server13.mp3quran.net/hudhaify"),
-        Reciter("jhn", "عبد الله عواد الجهني", "مرتل • حفص", "https://server13.mp3quran.net/jhn"),
-        Reciter("bna", "محمود علي البنا", "مجود • حفص", "https://server12.mp3quran.net/bna"),
-        Reciter("rifai", "محمد رفعت", "مجود • حفص", "https://server7.mp3quran.net/rifai"),
-        Reciter("tblawi", "محمد محمود الطبلاوي", "مجود • حفص", "https://server12.mp3quran.net/tblawi")
+        // القراء الأساسيون (1 - 15)
+        Reciter("afs", "مشاري راشد العفاسي", "مرتل • حفص عن عاصم", "https://server8.mp3quran.net/afs"),
+        Reciter("basit", "عبد الباسط عبد الصمد", "مجود • حفص عن عاصم", "https://server7.mp3quran.net/basit"),
+        Reciter("maher", "ماهر المعيقلي", "مرتل • حفص عن عاصم", "https://server12.mp3quran.net/maher"),
+        Reciter("yasser", "ياسر الدوسري", "مرتل • حفص عن عاصم", "https://server11.mp3quran.net/yasser"),
+        Reciter("minsh", "محمد صديق المنشاوي", "مرتل • حفص عن عاصم", "https://server10.mp3quran.net/minsh"),
+        Reciter("sudais", "عبد الرحمن السديس", "مرتل • حفص عن عاصم", "https://server11.mp3quran.net/sds"),
+        Reciter("shur", "سعود الشريم", "مرتل • حفص عن عاصم", "https://server11.mp3quran.net/shur"),
+        Reciter("ajm", "أحمد بن علي العجمي", "مرتل • حفص عن عاصم", "https://server6.mp3quran.net/ajm"),
+        Reciter("husr", "محمود خليل الحصري", "مرتل • حفص عن عاصم", "https://server5.mp3quran.net/husr"),
+        Reciter("ghamdi", "سعد الغامدي", "مرتل • حفص عن عاصم", "https://server11.mp3quran.net/ghamdi"),
+        Reciter("hud", "علي الحذيفي", "مرتل • حفص عن عاصم", "https://server13.mp3quran.net/hudhaify"),
+        Reciter("jhn", "عبد الله عواد الجهني", "مرتل • حفص عن عاصم", "https://server13.mp3quran.net/jhn"),
+        Reciter("bna", "محمود علي البنا", "مجود • حفص عن عاصم", "https://server12.mp3quran.net/bna"),
+        Reciter("rifai", "محمد رفعت", "مجود • حفص عن عاصم", "https://server7.mp3quran.net/rifai"),
+        Reciter("tblawi", "محمد محمود الطبلاوي", "مجود • حفص عن عاصم", "https://server12.mp3quran.net/tblawi"),
+
+        // الـ 15 قارئاً المضافون حديثاً (16 - 30)
+        Reciter("qtm", "ناصر القطامي", "مرتل • حفص عن عاصم", "https://server6.mp3quran.net/qtm"),
+        Reciter("fares", "فارس عباد", "مرتل • حفص عن عاصم", "https://server8.mp3quran.net/frs_a"),
+        Reciter("islam", "إسلام صبحي", "تلاوات خاشعة • حفص", "https://server14.mp3quran.net/islam/Rewayat-Hafs-A-n-Assem"),
+        Reciter("hazza", "هزاع البلوشي", "تلاوات خاشعة • حفص", "https://server11.mp3quran.net/hazza"),
+        Reciter("bader", "بدر التركي", "مرتل • حفص عن عاصم", "https://server10.mp3quran.net/bader/Rewayat-Hafs-A-n-Assem"),
+        Reciter("lhdan", "محمد اللحيدان", "مرتل • حفص عن عاصم", "https://server8.mp3quran.net/lhdan"),
+        Reciter("abkr", "إدريس أبكر", "مرتل • حفص عن عاصم", "https://server6.mp3quran.net/abkr"),
+        Reciter("jbrl", "محمد جبريل", "مرتل • حفص عن عاصم", "https://server8.mp3quran.net/jbrl"),
+        Reciter("buaijan", "عبد الله البعيجان", "مرتل • حفص عن عاصم", "https://server8.mp3quran.net/buaijan"),
+        Reciter("baleela", "بندر بليلة", "مرتل • حفص عن عاصم", "https://server6.mp3quran.net/balilah"),
+        Reciter("shatri", "أبو بكر الشاطري", "مرتل • حفص عن عاصم", "https://server11.mp3quran.net/shatri"),
+        Reciter("khaled", "خالد الجليل", "مرتل • حفص عن عاصم", "https://server10.mp3quran.net/jleel"),
+        Reciter("ayyub", "محمد أيوب", "مرتل • حفص عن عاصم", "https://server8.mp3quran.net/ayyub"),
+        Reciter("mustafa", "مصطفى إسماعيل", "مجود • حفص عن عاصم", "https://server8.mp3quran.net/mustafa"),
+        Reciter("basfar", "عبد الله بصفر", "مرتل • حفص عن عاصم", "https://server6.mp3quran.net/bsfr")
     )
 
     val surahs = listOf(
