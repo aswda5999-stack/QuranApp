@@ -1,0 +1,31 @@
+name: Generate Fixed Keystore
+
+on:
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Create Keystore and Print Base64
+        run: |
+          keytool -genkeypair -v \
+            -keystore release.keystore \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 36500 \
+            -alias quran_release_key \
+            -storepass QuranApp2026 \
+            -keypass QuranApp2026 \
+            -dname "CN=QuranApp, O=Quran, C=SA"
+
+          echo "================ انسخ النص الطويل الذي بالأسفل ================"
+          base64 -w 0 release.keystore
+          echo ""
+          echo "================================================================"
