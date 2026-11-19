@@ -19,6 +19,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -39,10 +40,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -437,10 +440,94 @@ private fun SmallPill(text: String, icon: ImageVector, onClick: () -> Unit) {
 }
 
 // ============================================================
-// 2. قارئ المصحف الشريف (ReaderScreen)
+// 2. قارئ المصحف الملون بالصفحات والإطارات الملكية (ReaderScreen)
 // ============================================================
-private val InvertMatrix = ColorMatrix(floatArrayOf(-1f, 0f, 0f, 0f, 255f, 0f, -1f, 0f, 0f, 255f, 0f, 0f, -1f, 0f, 255f, 0f, 0f, 0f, 1f, 0f))
-private val WarmMatrix = ColorMatrix(floatArrayOf(1f, 0f, 0f, 0f, 0f, 0f, 0.96f, 0f, 0f, 0f, 0f, 0f, 0.84f, 0f, 0f, 0f, 0f, 0f, 1f, 0f))
+private data class MushafThemeStyle(
+    val id: Int,
+    val name: String,
+    val outerBg: Color,
+    val pagePaper: Color,
+    val frameOuter: Color,
+    val frameInner: Color,
+    val headerBg: Color,
+    val headerText: Color,
+    val matrix: ColorMatrix?,
+    val isDark: Boolean
+)
+
+private val MushafThemes = listOf(
+    MushafThemeStyle(
+        id = 0,
+        name = "عاجي ملكي مذهّب",
+        outerBg = Color(0xFFEDE3CE),
+        pagePaper = Color(0xFFFFFBF0),
+        frameOuter = Color(0xFF0C5242),
+        frameInner = Color(0xFFD9AE43),
+        headerBg = Color(0xFFF6ECDA),
+        headerText = Color(0xFF052920),
+        // تباين دافئ وواضح للخط مع لمسة زمردية خفيفة
+        matrix = ColorMatrix(floatArrayOf(
+            0.96f, 0f, 0f, 0f, 4f,
+            0f, 0.94f, 0f, 0f, 2f,
+            0f, 0f, 0.85f, 0f, 0f,
+            0f, 0f, 0f, 1f, 0f
+        )),
+        isDark = false
+    ),
+    MushafThemeStyle(
+        id = 1,
+        name = "زمردي الحرمين",
+        outerBg = Color(0xFFDCEEE7),
+        pagePaper = Color(0xFFF1FAF6),
+        frameOuter = Color(0xFF052920),
+        frameInner = Color(0xFF147A67),
+        headerBg = Color(0xFFE0F2EA),
+        headerText = Color(0xFF052920),
+        // صبغة زمردية ناعمة مريحة للأعصاب
+        matrix = ColorMatrix(floatArrayOf(
+            0.88f, 0f, 0f, 0f, 0f,
+            0f, 0.97f, 0f, 0f, 4f,
+            0f, 0f, 0.92f, 0f, 2f,
+            0f, 0f, 0f, 1f, 0f
+        )),
+        isDark = false
+    ),
+    MushafThemeStyle(
+        id = 2,
+        name = "أزرق سماوي هادئ",
+        outerBg = Color(0xFFDCE9F5),
+        pagePaper = Color(0xFFF2F8FD),
+        frameOuter = Color(0xFF095256),
+        frameInner = Color(0xFF0284C7),
+        headerBg = Color(0xFFE2EFF9),
+        headerText = Color(0xFF095256),
+        matrix = ColorMatrix(floatArrayOf(
+            0.88f, 0f, 0f, 0f, 0f,
+            0f, 0.94f, 0f, 0f, 2f,
+            0f, 0f, 1.0f, 0f, 6f,
+            0f, 0f, 0f, 1f, 0f
+        )),
+        isDark = false
+    ),
+    MushafThemeStyle(
+        id = 3,
+        name = "ليلي ذهبي مريح",
+        outerBg = Color(0xFF07110E),
+        pagePaper = Color(0xFF0E1D18),
+        frameOuter = Color(0xFFD9AE43),
+        frameInner = Color(0xFF147A67),
+        headerBg = Color(0xFF132720),
+        headerText = Color(0xFFF7D97E),
+        // عكس الألوان للوضع الليلي مع تلوين الخط بالذهبي الدافئ المريح للعين
+        matrix = ColorMatrix(floatArrayOf(
+            -0.92f, 0f, 0f, 0f, 245f,
+            0f, -0.88f, 0f, 0f, 232f,
+            0f, 0f, -0.78f, 0f, 198f,
+            0f, 0f, 0f, 1f, 0f
+        )),
+        isDark = true
+    )
+)
 
 @Composable
 fun ReaderScreen(nav: Nav) {
@@ -452,6 +539,7 @@ fun ReaderScreen(nav: Nav) {
     val curPage = pagerState.currentPage + 1
     var chrome by remember { mutableStateOf(true) }
     var showJump by remember { mutableStateOf(false) }
+    var showThemeBar by remember { mutableStateOf(false) }
     var sliderDrag by remember { mutableStateOf<Float?>(null) }
 
     LaunchedEffect(pagerState) {
@@ -472,43 +560,123 @@ fun ReaderScreen(nav: Nav) {
         onDispose { w?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
 
-    val bg = when {
-        st.nightMode -> Color.Black
-        st.paperWarmth -> Color(0xFFF6EFE0)
-        else -> Color.White
-    }
+    val activeThemeIdx = if (st.nightMode) 3 else st.mushafColorMode.coerceIn(0, 3)
+    val theme = MushafThemes[activeThemeIdx]
     val surah = QuranData.surahForPage(curPage)
     val displayPage = sliderDrag?.toInt() ?: curPage
 
-    Column(Modifier.fillMaxSize().background(bg)) {
+    Column(Modifier.fillMaxSize().background(theme.outerBg)) {
         AnimatedVisibility(visible = chrome, enter = slideInVertically { -it } + fadeIn(), exit = slideOutVertically { -it } + fadeOut()) {
-            Surface(color = RoyalForest, shape = RoundedCornerShape(bottomStart = 26.dp, bottomEnd = 26.dp), border = BorderStroke(1.dp, GoldWarm.copy(alpha = 0.7f)), shadowElevation = 8.dp) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Surface(onClick = { fx.click(); nav.back() }, shape = CircleShape, color = EmeraldVibrant, border = BorderStroke(1.dp, GoldWarm.copy(alpha = 0.6f)), modifier = Modifier.size(38.dp)) {
-                        Box(contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "رجوع", tint = Color.White, modifier = Modifier.size(20.dp)) }
-                    }
-                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.AutoAwesome, null, tint = GoldShine, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("سورة ${surah.name}", color = GoldSoftBg, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+            Column {
+                Surface(
+                    color = RoyalForest,
+                    shape = RoundedCornerShape(bottomStart = 26.dp, bottomEnd = 26.dp),
+                    border = BorderStroke(1.dp, GoldWarm.copy(alpha = 0.7f)),
+                    shadowElevation = 8.dp
+                ) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            onClick = { fx.click(); nav.back() },
+                            shape = CircleShape,
+                            color = EmeraldVibrant,
+                            border = BorderStroke(1.dp, GoldWarm.copy(alpha = 0.6f)),
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "رجوع", tint = Color.White, modifier = Modifier.size(20.dp)) }
                         }
-                        Spacer(Modifier.height(2.dp))
-                        Surface(shape = CircleShape, color = Color.White.copy(alpha = 0.12f)) {
-                            Text("صفحة $displayPage / 604  •  الجزء ${QuranData.juzOfPage(displayPage)}", color = GoldShine, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp))
+
+                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.AutoAwesome, null, tint = GoldShine, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("سورة ${surah.name}", color = GoldSoftBg, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+                            }
+                            Spacer(Modifier.height(2.dp))
+                            Surface(shape = CircleShape, color = Color.White.copy(alpha = 0.12f)) {
+                                Text(
+                                    "صفحة $displayPage / 604  •  الجزء ${QuranData.juzOfPage(displayPage)}",
+                                    color = GoldShine,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+
+                        // زر اختيار ألوان المصحف (4 ثيمات)
+                        Surface(
+                            onClick = { fx.click(); showThemeBar = !showThemeBar },
+                            shape = CircleShape,
+                            color = if (showThemeBar) GoldWarm else EmeraldVibrant,
+                            border = BorderStroke(1.dp, GoldWarm.copy(alpha = 0.6f)),
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.Palette,
+                                    "ألوان المصحف",
+                                    tint = if (showThemeBar) RoyalForest else GoldShine,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     }
-                    Surface(onClick = { fx.click(); st.nightMode = !st.nightMode }, shape = CircleShape, color = EmeraldVibrant, border = BorderStroke(1.dp, GoldWarm.copy(alpha = 0.6f)), modifier = Modifier.size(38.dp)) {
-                        Box(contentAlignment = Alignment.Center) { Icon(if (st.nightMode) Icons.Default.LightMode else Icons.Default.DarkMode, "الوضع الليلي", tint = GoldShine, modifier = Modifier.size(20.dp)) }
+                }
+
+                // شريط اختيار لون صفحات المصحف الفوري
+                AnimatedVisibility(visible = showThemeBar) {
+                    Surface(
+                        color = RoyalForest.copy(alpha = 0.95f),
+                        shape = RoundedCornerShape(20.dp),
+                        border = BorderStroke(1.dp, GoldWarm),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(MushafThemes) { item ->
+                                val selected = item.id == activeThemeIdx
+                                Surface(
+                                    onClick = {
+                                        fx.click()
+                                        st.mushafColorMode = item.id
+                                        st.nightMode = (item.id == 3)
+                                    },
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = if (selected) GoldWarm else Color.White.copy(alpha = 0.1f),
+                                    border = BorderStroke(1.2.dp, if (selected) Color.White else item.frameInner)
+                                ) {
+                                    Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            Modifier
+                                                .size(16.dp)
+                                                .clip(CircleShape)
+                                                .background(item.pagePaper)
+                                                .border(1.5.dp, item.frameOuter, CircleShape)
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            item.name,
+                                            color = if (selected) RoyalForest else Color.White,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
 
         HorizontalPager(state = pagerState, modifier = Modifier.weight(1f).fillMaxWidth()) { idx ->
-            Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures(onTap = { chrome = !chrome }) }) {
-                MushafPage(idx + 1, st.nightMode, st.paperWarmth)
-            }
+            MushafPage(
+                page = idx + 1,
+                theme = theme,
+                onSingleTap = { chrome = !chrome }
+            )
         }
 
         AnimatedVisibility(visible = chrome, enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut()) {
@@ -581,31 +749,175 @@ private fun ProReaderNavButton(icon: ImageVector, label: String, active: Boolean
 }
 
 @Composable
-fun MushafPage(page: Int, night: Boolean, warm: Boolean) {
+private fun MushafPage(page: Int, theme: MushafThemeStyle, onSingleTap: () -> Unit) {
     val ctx = LocalContext.current
     var retry by remember { mutableIntStateOf(0) }
-    val filter = remember(night, warm) {
-        when {
-            night -> ColorFilter.colorMatrix(InvertMatrix)
-            warm -> ColorFilter.colorMatrix(WarmMatrix)
-            else -> null
-        }
-    }
-    key(retry) {
-        SubcomposeAsyncImage(
-            model = ImageRequest.Builder(ctx).data(QuranData.pageUrl(page)).crossfade(true).diskCachePolicy(CachePolicy.ENABLED).memoryCachePolicy(CachePolicy.ENABLED).build(),
-            contentDescription = "صفحة $page", contentScale = ContentScale.Fit, colorFilter = filter, modifier = Modifier.fillMaxSize().padding(4.dp),
-            loading = { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = GoldWarm) } },
-            error = {
-                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Icon(Icons.Default.Refresh, null, tint = GoldWarm, modifier = Modifier.size(40.dp))
-                    Spacer(Modifier.height(8.dp))
-                    Text("تعذر تحميل الصفحة $page", color = if (night) Color.White else InkDark, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(8.dp))
-                    Button(onClick = { retry++ }, colors = ButtonDefaults.buttonColors(containerColor = EmeraldVibrant)) { Text("إعادة المحاولة", color = GoldSoftBg, fontWeight = FontWeight.ExtraBold) }
+    var urlIdx by remember(page, retry) { mutableIntStateOf(0) }
+    val urls = remember(page) { QuranData.pageBackupUrls(page) }
+    val surah = remember(page) { QuranData.surahForPage(page) }
+    val juz = remember(page) { QuranData.juzOfPage(page) }
+
+    var scale by remember(page) { mutableFloatStateOf(1f) }
+    var offset by remember(page) { mutableStateOf(Offset.Zero) }
+
+    val filter = remember(theme) { theme.matrix?.let { ColorFilter.colorMatrix(it) } }
+
+    // إطار المصحف الملكي الملون المزدوج حول كل صفحة
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = theme.pagePaper,
+        border = BorderStroke(2.2.dp, theme.frameOuter),
+        shadowElevation = 6.dp,
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+    ) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(4.dp)
+                .border(1.2.dp, theme.frameInner, RoundedCornerShape(16.dp))
+                .clip(RoundedCornerShape(16.dp))
+                .background(theme.pagePaper)
+        ) {
+            // ترويسة الصفحة الزخرفية (اسم السورة يميناً والجزء يساراً)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(theme.headerBg)
+                    .padding(horizontal = 14.dp, vertical = 5.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "﴿ سورة ${surah.name} ﴾",
+                    color = theme.headerText,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 12.sp
+                )
+                Text(
+                    "الجزء $juz • ${surah.type}",
+                    color = theme.frameOuter,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 11.sp
+                )
+            }
+
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(theme.frameInner.copy(alpha = 0.55f))
+            )
+
+            // محتوى صفحة المصحف مع دعم التكبير بالنقر المزدوج أو السحب
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .pointerInput(page) {
+                        detectTapGestures(
+                            onDoubleTap = {
+                                if (scale > 1.1f) {
+                                    scale = 1f
+                                    offset = Offset.Zero
+                                } else {
+                                    scale = 2.0f
+                                }
+                            },
+                            onTap = { onSingleTap() }
+                        )
+                    }
+                    .pointerInput(page) {
+                        if (scale > 1.02f) {
+                            detectTransformGestures { _, pan, zoom, _ ->
+                                scale = (scale * zoom).coerceIn(1f, 2.8f)
+                                if (scale <= 1.02f) {
+                                    scale = 1f
+                                    offset = Offset.Zero
+                                } else {
+                                    offset = Offset(
+                                        (offset.x + pan.x).coerceIn(-350f, 350f),
+                                        (offset.y + pan.y).coerceIn(-450f, 450f)
+                                    )
+                                }
+                            }
+                        }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                key(retry, urlIdx) {
+                    SubcomposeAsyncImage(
+                        model = ImageRequest.Builder(ctx)
+                            .data(urls[urlIdx.coerceIn(0, urls.lastIndex)])
+                            .crossfade(true)
+                            .diskCachePolicy(CachePolicy.ENABLED)
+                            .memoryCachePolicy(CachePolicy.ENABLED)
+                            .build(),
+                        contentDescription = "صفحة $page",
+                        contentScale = ContentScale.Fit,
+                        colorFilter = filter,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                            .graphicsLayer(
+                                scaleX = scale,
+                                scaleY = scale,
+                                translationX = offset.x,
+                                translationY = offset.y
+                            ),
+                        loading = {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(color = GoldWarm)
+                            }
+                        },
+                        error = {
+                            if (urlIdx + 1 < urls.size) {
+                                LaunchedEffect(urlIdx) { urlIdx++ }
+                            } else {
+                                Column(
+                                    Modifier.fillMaxSize(),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(Icons.Default.Refresh, null, tint = GoldWarm, modifier = Modifier.size(40.dp))
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(
+                                        "تعذر تحميل الصفحة $page",
+                                        color = if (theme.isDark) Color.White else InkDark,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+                                    Button(
+                                        onClick = { retry++ },
+                                        colors = ButtonDefaults.buttonColors(containerColor = EmeraldVibrant)
+                                    ) {
+                                        Text("إعادة المحاولة", color = GoldSoftBg, fontWeight = FontWeight.ExtraBold)
+                                    }
+                                }
+                            }
+                        }
+                    )
                 }
             }
-        )
+
+            // تذييل الصفحة برقم الصفحة داخل زخرفة
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .background(theme.headerBg)
+                    .padding(vertical = 3.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "﴾ $page ﴿",
+                    color = theme.headerText,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 11.sp
+                )
+            }
+        }
     }
 }
 
