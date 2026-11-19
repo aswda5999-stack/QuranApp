@@ -1,3 +1,12 @@
+ERROR: AndroidManifest.xml:23: resource mipmap/ic_launcher not found
+ERROR: AndroidManifest.xml:27: resource mipmap/ic_launcher_round not found
+```[span_0](start_span)[span_0](end_span)
+
+مستودعك لا يحتوي على مجلد أيقونات `mipmap` (`ic_launcher` و `ic_launcher_round`)، لأن الأيقونة في مشروعك الأصلي موجودة في `drawable` أو يستخدم أيقونة نظام افتراضية[span_1](start_span)[span_1](end_span).
+
+لإصلاح الخطأ فوراً وإكمال البناء بنجاح، استبدل محتوى ملف **`app/src/main/AndroidManifest.xml`** بالكامل بالكود المصحح التالي (تم استبدال `mipmap` بأيقونة أندرويد الافتراضية المدمجة `@android:drawable/sym_def_app_icon` مع الإبقاء على كل الصلاحيات ومستقبل الأذان):
+
+```xml
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
@@ -22,9 +31,8 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@android:drawable/sym_def_app_icon"
         android:label="القرآن الكريم"
-        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
