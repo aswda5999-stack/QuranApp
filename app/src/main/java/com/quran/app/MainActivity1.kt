@@ -1,5 +1,6 @@
 package com.quran.app
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AlarmManager
 import android.app.NotificationChannel
@@ -9,18 +10,33 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
+import android.net.Uri
 import android.os.Build
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import android.os.PowerManager
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
+import kotlinx.coroutines.delay
 import kotlin.math.*
 import kotlin.reflect.KProperty
 
@@ -56,7 +72,6 @@ object QuranData {
 
     // 30 قارئاً من أشهر قراء العالم الإسلامي بروابط بث مباشرة ومستقرة
     val reciters = listOf(
-        // القراء الأساسيون (1 - 15)
         Reciter("afs", "مشاري راشد العفاسي", "مرتل • حفص عن عاصم", "https://server8.mp3quran.net/afs"),
         Reciter("basit", "عبد الباسط عبد الصمد", "مجود • حفص عن عاصم", "https://server7.mp3quran.net/basit"),
         Reciter("maher", "ماهر المعيقلي", "مرتل • حفص عن عاصم", "https://server12.mp3quran.net/maher"),
@@ -72,8 +87,6 @@ object QuranData {
         Reciter("bna", "محمود علي البنا", "مجود • حفص عن عاصم", "https://server12.mp3quran.net/bna"),
         Reciter("rifai", "محمد رفعت", "مجود • حفص عن عاصم", "https://server7.mp3quran.net/rifai"),
         Reciter("tblawi", "محمد محمود الطبلاوي", "مجود • حفص عن عاصم", "https://server12.mp3quran.net/tblawi"),
-
-        // الـ 15 قارئاً المضافون حديثاً (16 - 30)
         Reciter("qtm", "ناصر القطامي", "مرتل • حفص عن عاصم", "https://server6.mp3quran.net/qtm"),
         Reciter("fares", "فارس عباد", "مرتل • حفص عن عاصم", "https://server8.mp3quran.net/frs_a"),
         Reciter("islam", "إسلام صبحي", "تلاوات خاشعة • حفص", "https://server14.mp3quran.net/islam/Rewayat-Hafs-A-n-Assem"),
@@ -149,14 +162,18 @@ object QuranData {
         DailyVerse("﴿ أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ ﴾", "سورة الرعد • آية 28", 252),
         DailyVerse("﴿ وَقُل رَّبِّ زِدْنِي عِلْمًا ﴾", "سورة طه • آية 114", 320),
         DailyVerse("﴿ فَإِنِّي قَرِيبٌ أُجِيبُ دَعْوَةَ الدَّاعِ إِذَا دَعَانِ ﴾", "سورة البقرة • آية 186", 29),
-        DailyVerse("﴿ وَلَسَوْفَ يُعْطِيكَ رَبُّكَ فَتَرْضَىٰ ﴾", "سورة الضحى • آية 5", 596)
+        DailyVerse("﴿ وَلَسَوْفَ يُعْطِيكَ رَبُّكَ فَتَرْضَىٰ ﴾", "سورة الضحى • آية 5", 596),
+        DailyVerse("﴿ وَمَن يَتَّقِ اللَّهَ يَجْعَل لَّهُ مَخْرَجًا ﴾", "سورة الطلاق • آية 2", 558),
+        DailyVerse("﴿ رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً ﴾", "سورة البقرة • آية 201", 31)
     )
 
     val hadiths = listOf(
         HadithItem("الأعمال بالنيات", "«إِنَّمَا الأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى»", "متفق عليه"),
         HadithItem("خيركم من تعلم القرآن", "«خَيْرُكُمْ مَنْ تَعَلَّمَ الْقُرْآنَ وَعَلَّمَهُ»", "رواه البخاري"),
         HadithItem("شفاعة القرآن", "«اقْرَءُوا الْقُرْآنَ فَإِنَّهُ يَأْتِي يَوْمَ الْقِيَامَةِ شَفِيعًا لأَصْحَابِهِ»", "رواه مسلم"),
-        HadithItem("حسن الإسلام", "«مِنْ حُسْنِ إِسْلامِ الْمَرْءِ تَرْكُهُ مَا لا يَعْنِيهِ»", "رواه الترمذي")
+        HadithItem("حسن الإسلام", "«مِنْ حُسْنِ إِسْلامِ الْمَرْءِ تَرْكُهُ مَا لا يَعْنِيهِ»", "رواه الترمذي"),
+        HadithItem("أهل الله وخاصته", "«إِنَّ لِلَّهِ أَهْلِينَ مِنَ النَّاسِ: أَهْلُ الْقُرْآنِ هُمْ أَهْلُ اللَّهِ وَخَاصَّتُهُ»", "رواه ابن ماجه"),
+        HadithItem("الماهر بالقرآن", "«الْمَاهِرُ بِالْقُرْآنِ مَعَ السَّفَرَةِ الْكِرَامِ الْبَرَرَةِ»", "متفق عليه")
     )
 
     val adhkar = listOf(
@@ -165,7 +182,9 @@ object QuranData {
         DhikrItem("الرضا بالله", "رَضِيتُ بِاللَّهِ رَبًّا، وَبِالإِسْلامِ دِينًا، وَبِمُحَمَّدٍ ﷺ نَبِيًّا", 3),
         DhikrItem("حسبي الله", "حَسْبِيَ اللَّهُ لا إِلَهَ إِلا هُوَ عَلَيْهِ تَوَكَّلْتُ وَهُوَ رَبُّ الْعَرْشِ الْعَظِيمِ", 7),
         DhikrItem("الباقيات الصالحات", "سُبْحَانَ اللَّهِ، وَالْحَمْدُ لِلَّهِ، وَلا إِلَهَ إِلا اللَّهُ، وَاللَّهُ أَكْبَرُ", 33),
-        DhikrItem("الصلاة على النبي ﷺ", "اللَّهُمَّ صَلِّ وَسَلِّمْ وَبَارِكْ عَلَى نَبِيِّنَا مُحَمَّدٍ", 10)
+        DhikrItem("الصلاة على النبي ﷺ", "اللَّهُمَّ صَلِّ وَسَلِّمْ وَبَارِكْ عَلَى نَبِيِّنَا مُحَمَّدٍ", 10),
+        DhikrItem("سبحان الله وبحمده", "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ، سُبْحَانَ اللَّهِ الْعَظِيمِ", 100),
+        DhikrItem("لا حول ولا قوة إلا بالله", "لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ الْعَلِيِّ الْعَظِيمِ", 33)
     )
 
     val hifzQuizzes = listOf(
@@ -173,20 +192,31 @@ object QuranData {
         HifzQuizItem("أكمل الآية: ﴿ قُلْ هُوَ اللَّهُ ... ﴾", listOf("الصَّمَدُ", "أَحَدٌ", "الْوَاحِدُ"), 1, "سورة الإخلاص"),
         HifzQuizItem("أكمل الآية: ﴿ وَالْعَصْرِ * إِنَّ الْإِنسَانَ لَفِي ... ﴾", listOf("ضَلَالٍ", "خُسْرٍ", "غَفْلَةٍ"), 1, "سورة العصر"),
         HifzQuizItem("أكمل الآية: ﴿ أَلَمْ نَشْرَحْ لَكَ ... ﴾", listOf("قَلْبَكَ", "صَدْرَكَ", "أَمْرَكَ"), 1, "سورة الشرح"),
-        HifzQuizItem("أكمل الآية: ﴿ سَبِّحِ اسْمَ رَبِّكَ ... ﴾", listOf("الْعَظِيمِ", "الْكَرِيمِ", "الْأَعْلَى"), 2, "سورة الأعلى")
+        HifzQuizItem("أكمل الآية: ﴿ سَبِّحِ اسْمَ رَبِّكَ ... ﴾", listOf("الْعَظِيمِ", "الْكَرِيمِ", "الْأَعْلَى"), 2, "سورة الأعلى"),
+        HifzQuizItem("أكمل الآية: ﴿ إِيَّاكَ نَعْبُدُ وَإِيَّاكَ ... ﴾", listOf("نَسْتَعِينُ", "نَسْتَغْفِرُ", "نَتَوَكَّلُ"), 0, "سورة الفاتحة"),
+        HifzQuizItem("أكمل الآية: ﴿ قُلْ أَعُوذُ بِرَبِّ ... ﴾", listOf("النَّاسِ", "الْفَلَقِ", "الْعَالَمِينَ"), 1, "سورة الفلق"),
+        HifzQuizItem("أكمل الآية: ﴿ تَبَارَكَ الَّذِي بِيَدِهِ ... ﴾", listOf("الْأَمْرُ", "الْمُلْكُ", "الْخَلْقُ"), 1, "سورة الملك")
     )
 
     val cities = listOf(
-        City("القدس", 31.7683, 35.2137), City("غزة", 31.5017, 34.4668), City("رام الله", 31.9038, 35.2034),
-        City("عمّان", 31.9454, 35.9284), City("دمشق", 33.5138, 36.2765), City("حلب", 36.2021, 37.1343),
-        City("بيروت", 33.8938, 35.5018), City("بغداد", 33.3152, 44.3661), City("القاهرة", 30.0444, 31.2357),
-        City("الرياض", 24.7136, 46.6753), City("مكة المكرمة", 21.4225, 39.8262), City("المدينة المنورة", 24.4686, 39.6142),
-        City("دبي", 25.2048, 55.2708), City("الدوحة", 25.2854, 51.5310), City("الكويت", 29.3759, 47.9774),
-        City("إسطنبول", 41.0082, 28.9784), City("الدار البيضاء", 33.5731, -7.5898), City("الجزائر", 36.7538, 3.0588),
-        City("تونس", 36.8065, 10.1815), City("الخرطوم", 15.5007, 32.5599), City("صنعاء", 15.3694, 44.1910)
+        City("مكة المكرمة", 21.4225, 39.8262), City("المدينة المنورة", 24.4686, 39.6142),
+        City("القدس", 31.7683, 35.2137), City("دمشق", 33.5138, 36.2765), City("حلب", 36.2021, 37.1343)
     )
 
-    fun pageUrl(page: Int) = "https://android.quran.com/data/width_1024/page${page.toString().padStart(3, '0')}.png"
+    // رابط صفحات المصحف الملون عالي الدقة + روابط بديلة مرنة لأي شبكة
+    fun pageUrl(page: Int): String {
+        val p3 = page.coerceIn(1, 604).toString().padStart(3, '0')
+        return "https://android.quran.com/data/width_1024/page$p3.png"
+    }
+
+    fun pageBackupUrls(page: Int): List<String> {
+        val p3 = page.coerceIn(1, 604).toString().padStart(3, '0')
+        return listOf(
+            "https://android.quran.com/data/width_1024/page$p3.png",
+            "https://android.quran.com/data/width_1260/page$p3.png",
+            "https://everyayah.com/data/QuranText_jpg/$page.jpg"
+        )
+    }
 }
 
 // ============================================================
@@ -201,7 +231,7 @@ fun SharedPreferences.geoLoc(): GeoLoc {
     val lng = getString("loc_lng", null)?.toDoubleOrNull()
     val name = getString("loc_name", "") ?: ""
     return if (lat != null && lng != null && name.isNotBlank()) GeoLoc(name, lat, lng, false)
-    else GeoLoc("مكة المكرمة (افتراضي)", 21.4225, 39.8262, true)
+    else GeoLoc("مكة المكرمة (اضغط لتحديد موقعك)", 21.4225, 39.8262, true)
 }
 
 class PrefBool(private val sp: SharedPreferences, private val key: String, def: Boolean) {
@@ -231,13 +261,15 @@ class AppState(ctx: Context) {
 
     var nightMode by PrefBool(sp, "night_mode", false)
     var paperWarmth by PrefBool(sp, "paper_warmth", true)
+    // نمط ألوان صفحات المصحف: 0 = عاجي ملكي مذهب، 1 = أخضر زمردي ناعم، 2 = أزرق سماوي هادئ، 3 = ليلي مريح للعين
+    var mushafColorMode by PrefInt(sp, "mushaf_color_mode", 0)
     var soundOn by PrefBool(sp, "sound_on", true)
     var vibOn by PrefBool(sp, "vib_on", true)
     var stageVib by PrefBool(sp, "stage_vib", true)
     var keepOn by PrefBool(sp, "keep_on", true)
     var dailyReminder by PrefBool(sp, "daily_reminder", true)
     var adhkarAlert by PrefBool(sp, "morning_alert", true)
-    var prayerAlert by PrefBool(sp, "prayer_alert", false)
+    var prayerAlert by PrefBool(sp, "prayer_alert", true)
     var reminderHour by PrefInt(sp, "reminder_hour", 20)
     var dailyGoal by PrefInt(sp, "daily_goal", 5)
     var prayerMethod by PrefInt(sp, "prayer_method", 0)
@@ -441,7 +473,7 @@ object Notifs {
     fun ensureChannels(ctx: Context) {
         if (Build.VERSION.SDK_INT < 26) return
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
-        nm.createNotificationChannel(NotificationChannel(CH_PLAYER, "مشغل التلاوات", NotificationManager.IMPORTANCE_LOW))
+        nm.createNotificationChannel(NotificationChannel(CH_PLAYER, "مشغل التلاوات والأذان", NotificationManager.IMPORTANCE_HIGH))
         nm.createNotificationChannel(NotificationChannel(CH_REMIND, "التذكيرات اليومية", NotificationManager.IMPORTANCE_DEFAULT))
     }
 
@@ -498,15 +530,22 @@ object Reminders {
         arm(app, am, 2, "morning", if (adhkar) nextAt(6, 0) else null)
         arm(app, am, 3, "evening", if (adhkar) nextAt(17, 30) else null)
 
+        val geo = sp.geoLoc()
+        val method = sp.getInt("prayer_method", 0)
+        val offsets = AdhanEngine.getOffsets(app)
+        val baseToday = PrayerCalc.millis(geo, method, 0)
+        val baseTomorrow = PrayerCalc.millis(geo, method, 1)
+        val adjToday = LongArray(6) { i -> baseToday[i] + offsets[i] * 60_000L }
+        val adjTomorrow = LongArray(6) { i -> baseTomorrow[i] + offsets[i] * 60_000L }
+
+        // إعادة جدولة الأذان الصوتي الدقيق عند إعادة التشغيل أو تغيير الإعدادات
+        AdhanEngine.scheduleExactAdhans(app, adjToday, adjTomorrow)
+
         val prayerOn = sp.getBoolean("prayer_alert", false)
         if (prayerOn) {
-            val geo = sp.geoLoc()
-            val method = sp.getInt("prayer_method", 0)
             val now = System.currentTimeMillis()
-            val today = PrayerCalc.millis(geo, method, 0)
-            val tomorrow = PrayerCalc.millis(geo, method, 1)
             PrayerCalc.prayerIdx.forEachIndexed { i, idx ->
-                val t = if (today[idx] > now + 30_000) today[idx] else tomorrow[idx]
+                val t = if (adjToday[idx] > now + 30_000) adjToday[idx] else adjTomorrow[idx]
                 arm(app, am, 10 + i, "prayer_$i", t)
             }
         } else {
@@ -537,6 +576,137 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             Reminders.rescheduleAll(ctx)
+        }
+    }
+}
+
+// ============================================================
+// بوابة طلب الصلاحيات والأذونات التلقائية عند أول تشغيل للتطبيق
+// ============================================================
+@Composable
+fun StartupPermissionsGate() {
+    val ctx = LocalContext.current
+    val st = LocalApp.current
+    var showExactAlarmDialog by remember { mutableStateOf(false) }
+
+    val multiPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { perms ->
+        val locGranted = perms[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            perms[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+
+        if (locGranted) {
+            SmartLocationResolver.resolve(
+                ctx = ctx,
+                onResult = { placeName, lat, lng ->
+                    st.setLocation(placeName, lat, lng)
+                    Reminders.rescheduleAll(ctx)
+                },
+                onError = { }
+            )
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val am = ctx.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+            if (am != null && !am.canScheduleExactAlarms()) {
+                showExactAlarmDialog = true
+            } else {
+                requestIgnoreBatteryOptimization(ctx)
+            }
+        } else {
+            requestIgnoreBatteryOptimization(ctx)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val prefs = ctx.getSharedPreferences("startup_perms_prefs", Context.MODE_PRIVATE)
+        val permissionsToRequest = mutableListOf<String>()
+
+        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION)
+            permissionsToRequest.add(Manifest.permission.ACCESS_COARSE_LOCATION)
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        if (permissionsToRequest.isNotEmpty()) {
+            delay(500L)
+            multiPermLauncher.launch(permissionsToRequest.toTypedArray())
+        } else {
+            if (st.geo.isDefault) {
+                SmartLocationResolver.resolve(
+                    ctx = ctx,
+                    onResult = { placeName, lat, lng ->
+                        st.setLocation(placeName, lat, lng)
+                        Reminders.rescheduleAll(ctx)
+                    },
+                    onError = { }
+                )
+            }
+            if (!prefs.getBoolean("battery_asked", false)) {
+                prefs.edit().putBoolean("battery_asked", true).apply()
+                requestIgnoreBatteryOptimization(ctx)
+            }
+        }
+    }
+
+    if (showExactAlarmDialog) {
+        AlertDialog(
+            onDismissRequest = { showExactAlarmDialog = false },
+            shape = RoundedCornerShape(24.dp),
+            title = {
+                Text("تفعيل إذن الأذان الدقيق", fontWeight = FontWeight.ExtraBold)
+            },
+            text = {
+                Text(
+                    "لضمان رفع الأذان في وقته الدقيق حتى عند إغلاق التطبيق، يرجى السماح للتطبيق بضبط المنبهات والتذكيرات.",
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showExactAlarmDialog = false
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            runCatching {
+                                val intent = Intent(
+                                    Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                                    Uri.parse("package:${ctx.packageName}")
+                                )
+                                ctx.startActivity(intent)
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = EmeraldVibrant)
+                ) {
+                    Text("السماح الآن", color = GoldSoftBg, fontWeight = FontWeight.ExtraBold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExactAlarmDialog = false }) {
+                    Text("لاحقاً")
+                }
+            }
+        )
+    }
+}
+
+@SuppressLint("BatteryLife")
+private fun requestIgnoreBatteryOptimization(ctx: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        val pm = ctx.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
+        if (!pm.isIgnoringBatteryOptimizations(ctx.packageName)) {
+            runCatching {
+                val intent = Intent(
+                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:${ctx.packageName}")
+                ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+                ctx.startActivity(intent)
+            }
         }
     }
 }
