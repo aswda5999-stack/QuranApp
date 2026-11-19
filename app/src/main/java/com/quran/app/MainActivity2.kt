@@ -2,7 +2,6 @@
 
 package com.quran.app
 
-import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -16,10 +15,8 @@ import android.view.SoundEffectConstants
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -436,13 +433,8 @@ private fun AppRoot() {
         }
     }
 
-    val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-    LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !st.askedNotif) {
-            st.askedNotif = true
-            notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
-    }
+    // بوابة الصلاحيات التلقائية: تطلب الموقع، الإشعارات، المنبه الدقيق، واستثناء البطارية عند أول تشغيل
+    StartupPermissionsGate()
 
     BackHandler(enabled = stack.size > 1) { nav.back() }
 
