@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -168,7 +169,6 @@ fun DailyVerseCard(
                     .padding(18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // شريط عنوان "آية اليوم" الكبير بالخط العثماني + زر العودة لآية اليوم
                 Box(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center
@@ -218,7 +218,6 @@ fun DailyVerseCard(
 
                 Spacer(Modifier.height(12.dp))
 
-                // نص الآية القرآنية بالخط العثماني الأصلي وبحجم كبير
                 Text(
                     text = verse.text,
                     fontFamily = UthmanicFontFamily,
@@ -232,7 +231,6 @@ fun DailyVerseCard(
 
                 Spacer(Modifier.height(8.dp))
 
-                // اسم السورة ورقم الآية بالخط العثماني
                 Text(
                     text = "سُورَةُ ${verse.surah} • آيَةٌ ${verse.ayahNumber}",
                     fontFamily = UthmanicFontFamily,
@@ -243,7 +241,6 @@ fun DailyVerseCard(
 
                 Spacer(Modifier.height(10.dp))
 
-                // وقفة تدبرية قصيرة
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -264,7 +261,6 @@ fun DailyVerseCard(
 
                 Spacer(Modifier.height(14.dp))
 
-                // صف الأزرار: اقرأ في المصحف + نسخ + مشاركة
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -285,7 +281,6 @@ fun DailyVerseCard(
 
                 Spacer(Modifier.height(12.dp))
 
-                // أزرار التنقل بين الـ 75 آية
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -352,3 +347,4 @@ private fun VersePillButton(text: String, icon: ImageVector, onClick: () -> Unit
         }
     }
 }
+
