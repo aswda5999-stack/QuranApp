@@ -1,24 +1,17 @@
-ERROR: AndroidManifest.xml:23: resource mipmap/ic_launcher not found
-ERROR: AndroidManifest.xml:27: resource mipmap/ic_launcher_round not found
+ManifestMerger2$MergeFailureException: Error parsing /home/runner/work/QuranApp/QuranApp/app/src/main/AndroidManifest.xml
 ```[span_0](start_span)[span_0](end_span)
 
-مستودعك لا يحتوي على مجلد أيقونات `mipmap` (`ic_launcher` و `ic_launcher_round`)، لأن الأيقونة في مشروعك الأصلي موجودة في `drawable` أو يستخدم أيقونة نظام افتراضية[span_1](start_span)[span_1](end_span).
+يحدث هذا غالباً بسبب وجود سطر فارغ أو مسافة قبل `<?xml version="1.0" encoding="utf-8"?>` في السطر الأول عند النسخ من الهاتف، أو وجود نص مكرر أسفل `</manifest>`.
 
-لإصلاح الخطأ فوراً وإكمال البناء بنجاح، استبدل محتوى ملف **`app/src/main/AndroidManifest.xml`** بالكامل بالكود المصحح التالي (تم استبدال `mipmap` بأيقونة أندرويد الافتراضية المدمجة `@android:drawable/sym_def_app_icon` مع الإبقاء على كل الصلاحيات ومستقبل الأذان):
+لحلها نهائياً، انسخ الكود النظيف التالي (بدون تعليقات عربية وبدون أي سطر فارغ في البداية) والصقه في **`app/src/main/AndroidManifest.xml`**:
 
 ```xml
-<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- صلاحيات الإنترنت والشبكة لبث وتنزيل التلاوات والأذان على أي شبكة -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-
-    <!-- صلاحيات تحديد الموقع الجغرافي الدقيق لمواقيت الصلاة والقبلة -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-
-    <!-- صلاحيات تشغيل الصوت والأذان في الخلفية والمنبهات الدقيقة واستثناء البطارية -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -47,26 +40,22 @@ ERROR: AndroidManifest.xml:27: resource mipmap/ic_launcher_round not found
             </intent-filter>
         </activity>
 
-        <!-- خدمة تشغيل التلاوات الصوتية في الخلفية -->
         <service
             android:name=".PlayerService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
-        <!-- مستقبل منبهات الأذان التلقائي عند دخول وقت الصلاة -->
         <receiver
             android:name=".AdhanAlarmReceiver"
             android:enabled="true"
             android:exported="false" />
 
-        <!-- مستقبل تنبيهات الأذكار والورد اليومي -->
         <receiver
             android:name=".ReminderReceiver"
             android:enabled="true"
             android:exported="false" />
 
-        <!-- إعادة جدولة الأذان والتنبيهات تلقائياً عند إعادة تشغيل الهاتف -->
         <receiver
             android:name=".BootReceiver"
             android:enabled="true"
