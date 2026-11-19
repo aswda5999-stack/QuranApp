@@ -2,36 +2,22 @@
 
 package com.quran.app
 
-import android.Manifest
-import android.app.Activity
-import android.os.Build
-import android.view.WindowManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -40,941 +26,771 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.app.NotificationManagerCompat
-import coil.compose.SubcomposeAsyncImage
-import coil.imageLoader
-import coil.request.CachePolicy
-import coil.request.ImageRequest
 import java.util.Calendar
-import java.util.Locale
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.URL
 
 // ============================================================
-// 1. الشاشة الرئيسية (HomeScreen)
+// 1. الشاشة الرئيسية المتطورة (HomeScreen)
 // ============================================================
-private data class FeatureItem(
-    val title: String,
-    val icon: ImageVector,
-    val gradient: List<Color>,
-    val glowColor: Color,
-    val onClick: () -> Unit
-)
-
-private data class DateDetails(
-    val dayName: String,
-    val slashDate: String,
-    val gregorianMonth: String,
-    val hijriFull: String
-)
-
-private fun getFullDateDetails(): DateDetails {
-    val cal = Calendar.getInstance()
-    val days = listOf("الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت")
-    val gMonths = listOf(
-        "كانون الثاني", "شباط", "آذار", "نيسان", "أيار", "حزيران",
-        "تموز", "آب", "أيلول", "تشرين الأول", "تشرين الثاني", "كانون الأول"
-    )
-    val dayName = days[(cal.get(Calendar.DAY_OF_WEEK) - 1).coerceIn(0, 6)]
-    val year = cal.get(Calendar.YEAR)
-    val monthIdx = cal.get(Calendar.MONTH)
-    val day = cal.get(Calendar.DAY_OF_MONTH)
-    val slashDate = String.format(Locale.US, "%d/%d/%d", year, monthIdx + 1, day)
-    val gregorianMonth = gMonths[monthIdx.coerceIn(0, 11)]
-
-    val hijriFull = runCatching {
-        val ic = android.icu.util.IslamicCalendar()
-        val hMonths = listOf(
-            "محرم", "صفر", "ربيع الأول", "ربيع الآخر", "جمادى الأولى", "جمادى الآخرة",
-            "رجب", "شعبان", "رمضان", "شوال", "ذو القعدة", "ذو الحجة"
-        )
-        "${ic.get(android.icu.util.Calendar.DAY_OF_MONTH)} ${hMonths[ic.get(android.icu.util.Calendar.MONTH)]} ${ic.get(android.icu.util.Calendar.YEAR)} هـ"
-    }.getOrDefault("")
-
-    return DateDetails(dayName, slashDate, gregorianMonth, hijriFull)
-}
-
-private fun dynamicGreeting(): String {
-    val h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-    return when {
-        h in 5..11 -> "صباح الخير"
-        h in 12..16 -> "طاب يومك"
-        else -> "مساء الخير"
-    }
-}
-
 @Composable
 fun HomeScreen(nav: Nav) {
     val st = LocalApp.current
-    val fx = LocalFx.current
     val p = LocalPalette.current
+    val fx = LocalFx.current
     val ctx = LocalContext.current
 
-    val dayIdx = remember { Calendar.getInstance().get(Calendar.DAY_OF_YEAR) }
-    val hadith = QuranData.hadiths[dayIdx % QuranData.hadiths.size]
-    val dateInfo = remember { getFullDateDetails() }
-    val greetText = remember { dynamicGreeting() }
-
-    var query by remember { mutableStateOf("") }
-    var showNotif by remember { mutableStateOf(false) }
-    var notifOn by remember { mutableStateOf(NotificationManagerCompat.from(ctx).areNotificationsEnabled()) }
-    val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        notifOn = NotificationManagerCompat.from(ctx).areNotificationsEnabled()
+    val greeting = remember {
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        when {
+            hour in 4..11 -> "صَبَاحُ الْخَيْرِ"
+            hour in 12..16 -> "طَابَ يَوْمُكَ"
+            else -> "مَسَاءُ الْخَيْرِ"
+        }
     }
 
-    val goal = st.dailyGoal
-    val today = st.todayPages()
-    val badge = (if (!notifOn) 1 else 0) + (if (today < goal) 1 else 0)
-    val page = st.lastPage
-    val curSurah = QuranData.surahForPage(page)
+    val lastSurah = remember(st.lastPage) { QuranData.surahForPage(st.lastPage) }
+    val lastJuz = remember(st.lastPage) { QuranData.juzForPage(st.lastPage) }
     val pct = st.khatmaPercent()
+    val todayRead = st.todayPages()
 
-    val results = remember(query) { if (query.isBlank()) emptyList() else QuranData.search(query).take(5) }
-    val pageNum = query.trim().toIntOrNull()?.takeIf { it in 1..604 }
-
-    val features = listOf(
-        FeatureItem("قراءة القرآن", Icons.AutoMirrored.Filled.MenuBook, listOf(Color(0xFF059669), Color(0xFF10B981)), Color(0xFF10B981)) {
-            nav.openPage(st.lastPage)
-        },
-        FeatureItem("استماع القرآن", Icons.Default.Headphones, listOf(Color(0xFF2563EB), Color(0xFF38BDF8)), Color(0xFF38BDF8)) {
-            nav.push(Screen.Audio)
-        },
-        FeatureItem("الأذكار", Icons.Default.WbSunny, listOf(Color(0xFFD97706), Color(0xFFFBBF24)), Color(0xFFFBBF24)) {
-            nav.tasbihTab = 1; nav.push(Screen.Tasbih)
-        },
-        FeatureItem("التسبيح", Icons.Default.Fingerprint, listOf(Color(0xFF7C3AED), Color(0xFFA78BFA)), Color(0xFFA78BFA)) {
-            nav.tasbihTab = 0; nav.push(Screen.Tasbih)
-        },
-        FeatureItem("الأحاديث", Icons.Default.AutoStories, listOf(Color(0xFF0284C7), Color(0xFF22D3EE)), Color(0xFF22D3EE)) {
-            nav.push(Screen.Hadith)
-        },
-        FeatureItem("مواقيت الصلاة", Icons.Default.AccessTime, listOf(Color(0xFF0D9488), Color(0xFF2DD4BF)), Color(0xFF2DD4BF)) {
-            nav.push(Screen.Prayer)
-        },
-        FeatureItem("المفضلة", Icons.Default.Favorite, listOf(Color(0xFFE11D48), Color(0xFFFB7185)), Color(0xFFFB7185)) {
-            nav.push(Screen.Favorites)
-        },
-        FeatureItem("الحفظ", Icons.Default.School, listOf(Color(0xFFB45309), Color(0xFFF59E0B)), Color(0xFFF59E0B)) {
-            nav.push(Screen.Hifz)
-        }
-    )
-
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    LazyColumn(
+        contentPadding = PaddingValues(bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // 1. الترويسة الملكية الكبيرة مع التحية بالخط العثماني العريض
         item {
-            Box(
-                Modifier.fillMaxWidth()
-                    .clip(RoundedCornerShape(bottomStart = 36.dp, bottomEnd = 36.dp))
-                    .background(Brush.verticalGradient(listOf(RoyalForest, EmeraldVibrant, TurquoiseAccent)))
+            Surface(
+                color = RoyalForest,
+                shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
+                border = BorderStroke(1.3.dp, GoldWarm.copy(alpha = 0.65f)),
+                shadowElevation = 10.dp
             ) {
-                IslamicPattern(Modifier.matchParentSize())
-                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        HeaderIconButton(Icons.Default.Notifications, badge, "التنبيهات") { showNotif = true }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(greetText, color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
-                            Spacer(Modifier.height(2.dp))
-                            Text("اليوم: ${dateInfo.dayName}  •  ${dateInfo.slashDate}", color = GoldShine, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
-                            Text("${dateInfo.gregorianMonth}  |  ${dateInfo.hijriFull}", color = GoldSoftBg.copy(alpha = 0.92f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                        HeaderIconButton(Icons.Default.Settings, 0, "الإعدادات") { nav.push(Screen.Settings) }
-                    }
-                    Spacer(Modifier.height(14.dp))
-                    NextPrayerHeroCard(nav)
-                    Spacer(Modifier.height(10.dp))
-                    Surface(
-                        onClick = { fx.click(); nav.openPage(st.lastPage) },
-                        shape = RoundedCornerShape(20.dp),
-                        color = RoyalForest.copy(alpha = 0.55f),
-                        border = BorderStroke(1.dp, GoldWarm.copy(alpha = 0.75f)),
-                        modifier = Modifier.fillMaxWidth()
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(RoyalForest, EmeraldVibrant, TealStart)
+                            )
+                        )
+                        .statusBarsPadding()
+                ) {
+                    IslamicPattern(Modifier.matchParentSize())
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 18.dp, vertical = 18.dp)
                     ) {
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(progress = { pct / 100f }, strokeWidth = 4.dp, color = GoldShine, trackColor = Color.White.copy(alpha = 0.2f), modifier = Modifier.fillMaxSize())
-                                Text("$pct%", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                // كلمة التحية الكبيرة بالخط العثماني العريض
+                                Text(
+                                    text = greeting,
+                                    fontFamily = UthmanicFontFamily,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 34.sp,
+                                    color = GoldShine,
+                                    lineHeight = 44.sp
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = "نَوَّرَ اللَّهُ يَوْمَكَ بِالْقُرْآنِ وَالذِّكْرِ",
+                                    fontFamily = UthmanicFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = GoldSoftBg.copy(alpha = 0.92f)
+                                )
                             }
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text("تابع القراءة • سورة ${curSurah.name}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
-                                Text("صفحة $page من 604 • الجزء ${QuranData.juzOfPage(page)}", color = GoldSoftBg.copy(alpha = 0.85f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                IconButton(
+                                    onClick = { fx.click(); nav.push(Screen.Bookmarks) },
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.White.copy(alpha = 0.14f))
+                                        .border(1.dp, GoldShine.copy(alpha = 0.45f), CircleShape)
+                                ) {
+                                    Icon(Icons.Default.Bookmarks, "المفضلة", tint = GoldShine, modifier = Modifier.size(20.dp))
+                                }
+
+                                IconButton(
+                                    onClick = { fx.click(); nav.push(Screen.Settings) },
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.White.copy(alpha = 0.14f))
+                                        .border(1.dp, GoldShine.copy(alpha = 0.45f), CircleShape)
+                                ) {
+                                    Icon(Icons.Default.Settings, "الإعدادات", tint = GoldShine, modifier = Modifier.size(20.dp))
+                                }
                             }
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = GoldShine, modifier = Modifier.size(24.dp))
+                        }
+
+                        Spacer(Modifier.height(16.dp))
+
+                        // بطاقة متابعة التلاوة والختمة السريعة داخل الترويسة
+                        Surface(
+                            onClick = { fx.click(); nav.openPage(st.lastPage) },
+                            shape = RoundedCornerShape(22.dp),
+                            color = Color.Black.copy(alpha = 0.24f),
+                            border = BorderStroke(1.1.dp, GoldShine.copy(alpha = 0.55f))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .size(50.dp)
+                                        .clip(RoundedCornerShape(15.dp))
+                                        .background(Brush.linearGradient(listOf(GoldShine, GoldWarm)))
+                                ) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.MenuBook,
+                                        null,
+                                        tint = RoyalForest,
+                                        modifier = Modifier.size(26.dp)
+                                    )
+                                }
+
+                                Spacer(Modifier.width(12.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "متابعة التلاوة • سورة ${lastSurah.name}",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 15.sp
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        text = "صفحة ${st.lastPage} • ${lastJuz.name} • الختمة $pct%",
+                                        color = GoldSoftBg,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp
+                                    )
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = GoldShine
+                                ) {
+                                    Text(
+                                        text = "أكمل",
+                                        color = RoyalForest,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
         }
 
-        item {
-            QCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = RoundedCornerShape(20.dp), borderColor = GoldWarm) {
-                TextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    singleLine = true,
-                    placeholder = { Text("ابحث باسم السورة أو رقمها أو رقم الصفحة...", color = p.muted, fontSize = 12.sp, fontWeight = FontWeight.Bold) },
-                    leadingIcon = { Icon(Icons.Default.Search, null, tint = TurquoiseAccent) },
-                    trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Default.Close, "مسح", tint = p.muted) } },
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-        if (query.isNotBlank()) {
-            item {
-                QCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                    Column(Modifier.padding(6.dp)) {
-                        if (pageNum != null) SearchRow("الذهاب إلى صفحة $pageNum", "المصحف الشريف", null) { query = ""; nav.openPage(pageNum) }
-                        results.forEach { s -> SearchRow("سورة ${s.name}", "${s.type} • ${s.ayahs} آية • ص ${s.page}", s.num) { query = ""; nav.openPage(s.page) } }
-                        if (results.isEmpty() && pageNum == null) Text("لا توجد نتائج مطابقة", color = p.muted, fontWeight = FontWeight.Bold, modifier = Modifier.padding(14.dp))
-                    }
-                }
-            }
-        }
-
-        item {
-            Column(Modifier.padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                features.chunked(4).forEach { rowItems ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        rowItems.forEach { item -> ProFeatureTile(item, Modifier.weight(1f)) }
-                    }
-                }
-            }
-        }
-
-        // بطاقة آية اليوم المستقلة والمتطورة من الملف السادس (MainActivity6.kt)
+        // 2. بطاقة آية اليوم المستقلة (من الملف السادس MainActivity6.kt)
         item {
             DailyVerseCard(nav = nav)
         }
 
+        // 3. بطاقة شريط التقدم والورد اليومي
         item {
-            QCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = RoundedCornerShape(24.dp), borderColor = GoldWarm) {
+            QCard(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(22.dp),
+                borderColor = GoldWarm.copy(alpha = 0.4f),
+                onClick = { nav.push(Screen.Hifz) }
+            ) {
                 Column(Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(34.dp).clip(CircleShape).background(GoldWarm.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.FormatQuote, null, tint = GoldWarm, modifier = Modifier.size(20.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.AutoGraph, null, tint = TurquoiseAccent, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("الورد اليومي والختمة", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = p.ink)
                         }
-                        Spacer(Modifier.width(8.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("حديث اليوم", color = GoldWarm, fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
-                            Text(hadith.title, color = TurquoiseAccent, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
-                        }
-                        IconButton(onClick = { fx.click(); shareText(ctx, "${hadith.text}\n${hadith.source}") }, modifier = Modifier.size(34.dp)) {
-                            Icon(Icons.Default.Share, "مشاركة", tint = TurquoiseAccent, modifier = Modifier.size(18.dp))
-                        }
+                        Text(
+                            "$todayRead / ${st.dailyGoal} صفحات اليوم",
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 12.sp,
+                            color = EmeraldVibrant
+                        )
                     }
                     Spacer(Modifier.height(10.dp))
-                    Text(hadith.text, color = p.ink, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, fontSize = 16.sp, lineHeight = 28.sp)
-                    Spacer(Modifier.height(6.dp))
-                    Text(hadith.source, color = p.muted, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                }
-            }
-        }
-    }
-
-    if (showNotif) {
-        AlertDialog(
-            onDismissRequest = { showNotif = false },
-            shape = RoundedCornerShape(26.dp),
-            containerColor = p.card,
-            title = { Text("التنبيهات", fontWeight = FontWeight.ExtraBold, color = p.ink) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (today < goal) Text("• بقي لك ${goal - today} صفحات لإتمام وردك اليوم.", fontWeight = FontWeight.Bold, color = p.ink)
-                    else Text("• أتممت وردك اليوم، بارك الله فيك.", fontWeight = FontWeight.Bold, color = p.ink)
-                    Text("• قراءة سورة الملك قبل النوم من السنن المأثورة.", fontWeight = FontWeight.Bold, color = p.ink)
-                    if (!notifOn) {
-                        Text("• إشعارات التطبيق متوقفة، فعّلها لتصلك التذكيرات.", fontWeight = FontWeight.Bold, color = Color(0xFFB71C1C))
-                        Button(
-                            onClick = { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) permLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
-                            shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = EmeraldVibrant)
-                        ) { Text("تفعيل الإشعارات", color = GoldSoftBg, fontWeight = FontWeight.Bold) }
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { showNotif = false; nav.push(Screen.Settings) }) { Text("إعدادات التذكير", fontWeight = FontWeight.ExtraBold, color = TurquoiseAccent) } },
-            dismissButton = { TextButton(onClick = { showNotif = false }) { Text("حسناً", color = p.muted, fontWeight = FontWeight.Bold) } }
-        )
-    }
-}
-
-@Composable
-private fun HeaderIconButton(icon: ImageVector, badge: Int, desc: String, onClick: () -> Unit) {
-    val fx = LocalFx.current
-    Box {
-        Surface(
-            onClick = { fx.click(); onClick() }, shape = CircleShape, color = RoyalForest.copy(alpha = 0.75f),
-            border = BorderStroke(1.2.dp, GoldWarm), modifier = Modifier.size(42.dp)
-        ) { Box(contentAlignment = Alignment.Center) { Icon(icon, desc, tint = GoldSoftBg, modifier = Modifier.size(21.dp)) } }
-        if (badge > 0) {
-            Surface(shape = CircleShape, color = Color(0xFFE11D48), modifier = Modifier.size(17.dp).align(Alignment.TopEnd)) {
-                Box(contentAlignment = Alignment.Center) { Text("$badge", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun NextPrayerHeroCard(nav: Nav) {
-    val st = LocalApp.current
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
-    val next = remember(st.geo, st.prayerMethod, now / 60_000) { PrayerCalc.nextPrayer(st.geo, st.prayerMethod, now) }
-    val tz = remember(st.geo) { PrayerCalc.tzFor(st.geo) }
-
-    Surface(
-        onClick = { nav.push(Screen.Prayer) },
-        shape = RoundedCornerShape(22.dp),
-        color = Color.White.copy(alpha = 0.14f),
-        border = BorderStroke(1.2.dp, GoldShine.copy(alpha = 0.7f)),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).clip(CircleShape).background(GoldShine.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.AccessTimeFilled, null, tint = GoldShine, modifier = Modifier.size(24.dp))
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("متبقي لصلاة ${PrayerCalc.names[next.first]}", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
-                Text("موعد الأذان: ${PrayerCalc.fmt(next.second, tz)}  •  ${st.geo.name}", color = GoldSoftBg, fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Surface(shape = RoundedCornerShape(14.dp), color = RoyalForest.copy(alpha = 0.75f), border = BorderStroke(1.dp, GoldWarm)) {
-                Text(if (next.second > 0) PrayerCalc.countdown(next.second - now) else "--:--:--", color = GoldShine, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun ProFeatureTile(item: FeatureItem, modifier: Modifier) {
-    val p = LocalPalette.current
-    val fx = LocalFx.current
-    Column(
-        modifier = modifier.clip(RoundedCornerShape(18.dp)).clickable { fx.click(); item.onClick() }.padding(vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            modifier = Modifier
-                .size(58.dp)
-                .shadow(6.dp, RoundedCornerShape(20.dp), ambientColor = item.glowColor, spotColor = item.glowColor)
-                .clip(RoundedCornerShape(20.dp))
-                .background(Brush.linearGradient(item.gradient))
-                .border(1.3.dp, Color.White.copy(alpha = 0.55f), RoundedCornerShape(20.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(item.icon, item.title, tint = Color.White, modifier = Modifier.size(27.dp))
-        }
-        Spacer(Modifier.height(6.dp))
-        Text(item.title, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
-    }
-}
-
-@Composable
-private fun SearchRow(title: String, sub: String, num: Int?, onClick: () -> Unit) {
-    val p = LocalPalette.current
-    val fx = LocalFx.current
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable { fx.click(); onClick() }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (num != null) NumberBadge(num, 30) else Icon(Icons.AutoMirrored.Filled.MenuBook, null, tint = GoldWarm, modifier = Modifier.size(30.dp))
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, fontWeight = FontWeight.ExtraBold, color = p.ink, fontSize = 14.sp)
-            Text(sub, color = p.muted, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-        }
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = GoldWarm)
-    }
-}
-
-// ============================================================
-// 2. قارئ المصحف الملون بالصفحات والإطارات الملكية (ReaderScreen)
-// ============================================================
-private data class MushafThemeStyle(
-    val id: Int,
-    val name: String,
-    val outerBg: Color,
-    val pagePaper: Color,
-    val frameOuter: Color,
-    val frameInner: Color,
-    val headerBg: Color,
-    val headerText: Color,
-    val matrix: ColorMatrix?,
-    val isDark: Boolean
-)
-
-private val MushafThemes = listOf(
-    MushafThemeStyle(
-        id = 0,
-        name = "عاجي ملكي مذهّب",
-        outerBg = Color(0xFFEDE3CE),
-        pagePaper = Color(0xFFFFFBF0),
-        frameOuter = Color(0xFF0C5242),
-        frameInner = Color(0xFFD9AE43),
-        headerBg = Color(0xFFF6ECDA),
-        headerText = Color(0xFF052920),
-        matrix = ColorMatrix(floatArrayOf(
-            0.96f, 0f, 0f, 0f, 4f,
-            0f, 0.94f, 0f, 0f, 2f,
-            0f, 0f, 0.85f, 0f, 0f,
-            0f, 0f, 0f, 1f, 0f
-        )),
-        isDark = false
-    ),
-    MushafThemeStyle(
-        id = 1,
-        name = "زمردي الحرمين",
-        outerBg = Color(0xFFDCEEE7),
-        pagePaper = Color(0xFFF1FAF6),
-        frameOuter = Color(0xFF052920),
-        frameInner = Color(0xFF147A67),
-        headerBg = Color(0xFFE0F2EA),
-        headerText = Color(0xFF052920),
-        matrix = ColorMatrix(floatArrayOf(
-            0.88f, 0f, 0f, 0f, 0f,
-            0f, 0.97f, 0f, 0f, 4f,
-            0f, 0f, 0.92f, 0f, 2f,
-            0f, 0f, 0f, 1f, 0f
-        )),
-        isDark = false
-    ),
-    MushafThemeStyle(
-        id = 2,
-        name = "أزرق سماوي هادئ",
-        outerBg = Color(0xFFDCE9F5),
-        pagePaper = Color(0xFFF2F8FD),
-        frameOuter = Color(0xFF095256),
-        frameInner = Color(0xFF0284C7),
-        headerBg = Color(0xFFE2EFF9),
-        headerText = Color(0xFF095256),
-        matrix = ColorMatrix(floatArrayOf(
-            0.88f, 0f, 0f, 0f, 0f,
-            0f, 0.94f, 0f, 0f, 2f,
-            0f, 0f, 1.0f, 0f, 6f,
-            0f, 0f, 0f, 1f, 0f
-        )),
-        isDark = false
-    ),
-    MushafThemeStyle(
-        id = 3,
-        name = "ليلي ذهبي مريح",
-        outerBg = Color(0xFF07110E),
-        pagePaper = Color(0xFF0E1D18),
-        frameOuter = Color(0xFFD9AE43),
-        frameInner = Color(0xFF147A67),
-        headerBg = Color(0xFF132720),
-        headerText = Color(0xFFF7D97E),
-        matrix = ColorMatrix(floatArrayOf(
-            -0.92f, 0f, 0f, 0f, 245f,
-            0f, -0.88f, 0f, 0f, 232f,
-            0f, 0f, -0.78f, 0f, 198f,
-            0f, 0f, 0f, 1f, 0f
-        )),
-        isDark = true
-    )
-)
-
-@Composable
-fun ReaderScreen(nav: Nav) {
-    val st = LocalApp.current
-    val fx = LocalFx.current
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val pagerState = rememberPagerState(initialPage = (st.lastPage - 1).coerceIn(0, 603), pageCount = { 604 })
-    val curPage = pagerState.currentPage + 1
-    var chrome by remember { mutableStateOf(true) }
-    var showJump by remember { mutableStateOf(false) }
-    var showThemeBar by remember { mutableStateOf(false) }
-    var sliderDrag by remember { mutableStateOf<Float?>(null) }
-
-    LaunchedEffect(pagerState) {
-        var first = true
-        snapshotFlow { pagerState.currentPage }.collect { idx ->
-            st.onPageViewed(idx + 1, counted = !first)
-            first = false
-        }
-    }
-    LaunchedEffect(curPage) {
-        for (n in listOf(curPage + 1, curPage + 2, curPage - 1)) {
-            if (n in 1..604) ctx.imageLoader.enqueue(ImageRequest.Builder(ctx).data(QuranData.pageUrl(n)).build())
-        }
-    }
-    DisposableEffect(st.keepOn) {
-        val w = (ctx as? Activity)?.window
-        if (st.keepOn) w?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        onDispose { w?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
-    }
-
-    val activeThemeIdx = if (st.nightMode) 3 else st.mushafColorMode.coerceIn(0, 3)
-    val theme = MushafThemes[activeThemeIdx]
-    val surah = QuranData.surahForPage(curPage)
-    val displayPage = sliderDrag?.toInt() ?: curPage
-
-    Column(Modifier.fillMaxSize().background(theme.outerBg)) {
-        AnimatedVisibility(visible = chrome, enter = slideInVertically { -it } + fadeIn(), exit = slideOutVertically { -it } + fadeOut()) {
-            Column {
-                Surface(
-                    color = RoyalForest,
-                    shape = RoundedCornerShape(bottomStart = 26.dp, bottomEnd = 26.dp),
-                    border = BorderStroke(1.dp, GoldWarm.copy(alpha = 0.7f)),
-                    shadowElevation = 8.dp
-                ) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            onClick = { fx.click(); nav.back() },
-                            shape = CircleShape,
-                            color = EmeraldVibrant,
-                            border = BorderStroke(1.dp, GoldWarm.copy(alpha = 0.6f)),
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "رجوع", tint = Color.White, modifier = Modifier.size(20.dp)) }
-                        }
-
-                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.AutoAwesome, null, tint = GoldShine, modifier = Modifier.size(14.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("سورة ${surah.name}", color = GoldSoftBg, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
-                            }
-                            Spacer(Modifier.height(2.dp))
-                            Surface(shape = CircleShape, color = Color.White.copy(alpha = 0.12f)) {
-                                Text(
-                                    "صفحة $displayPage / 604  •  الجزء ${QuranData.juzOfPage(displayPage)}",
-                                    color = GoldShine,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-
-                        Surface(
-                            onClick = { fx.click(); showThemeBar = !showThemeBar },
-                            shape = CircleShape,
-                            color = if (showThemeBar) GoldWarm else EmeraldVibrant,
-                            border = BorderStroke(1.dp, GoldWarm.copy(alpha = 0.6f)),
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Icons.Default.Palette,
-                                    "ألوان المصحف",
-                                    tint = if (showThemeBar) RoyalForest else GoldShine,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                AnimatedVisibility(visible = showThemeBar) {
-                    Surface(
-                        color = RoyalForest.copy(alpha = 0.95f),
-                        shape = RoundedCornerShape(20.dp),
-                        border = BorderStroke(1.dp, GoldWarm),
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(MushafThemes) { item ->
-                                val selected = item.id == activeThemeIdx
-                                Surface(
-                                    onClick = {
-                                        fx.click()
-                                        st.mushafColorMode = item.id
-                                        st.nightMode = (item.id == 3)
-                                    },
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = if (selected) GoldWarm else Color.White.copy(alpha = 0.1f),
-                                    border = BorderStroke(1.2.dp, if (selected) Color.White else item.frameInner)
-                                ) {
-                                    Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Box(
-                                            Modifier
-                                                .size(16.dp)
-                                                .clip(CircleShape)
-                                                .background(item.pagePaper)
-                                                .border(1.5.dp, item.frameOuter, CircleShape)
-                                        )
-                                        Spacer(Modifier.width(6.dp))
-                                        Text(
-                                            item.name,
-                                            color = if (selected) RoyalForest else Color.White,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            fontSize = 11.sp
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        HorizontalPager(state = pagerState, modifier = Modifier.weight(1f).fillMaxWidth()) { idx ->
-            MushafPage(
-                page = idx + 1,
-                theme = theme,
-                onSingleTap = { chrome = !chrome }
-            )
-        }
-
-        AnimatedVisibility(visible = chrome, enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut()) {
-            Surface(color = RoyalForest, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp), border = BorderStroke(1.3.dp, GoldWarm), shadowElevation = 12.dp) {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        IconButton(onClick = { fx.click(); if (curPage < 604) scope.launch { pagerState.animateScrollToPage(curPage) } }, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.ChevronRight, "التالية", tint = GoldShine)
-                        }
-                        Slider(
-                            value = (sliderDrag ?: curPage.toFloat()).coerceIn(1f, 604f),
-                            onValueChange = { sliderDrag = it },
-                            onValueChangeFinished = {
-                                val target = sliderDrag?.toInt() ?: curPage
-                                sliderDrag = null
-                                scope.launch { pagerState.scrollToPage(target.coerceIn(1, 604) - 1) }
-                            },
-                            valueRange = 1f..604f,
-                            colors = SliderDefaults.colors(thumbColor = GoldShine, activeTrackColor = GoldShine, inactiveTrackColor = Color.White.copy(alpha = 0.25f)),
-                            modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
-                        )
-                        IconButton(onClick = { fx.click(); if (curPage > 1) scope.launch { pagerState.animateScrollToPage(curPage - 2) } }, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.ChevronLeft, "السابقة", tint = GoldShine)
-                        }
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Row(Modifier.fillMaxWidth().padding(bottom = 2.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        val isSaved = st.isFav(curPage)
-                        ProReaderNavButton(if (isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder, if (isSaved) "محفوظة" else "المفضلة", isSaved) { fx.click(); st.toggleFav(curPage) }
-                        ProReaderNavButton(Icons.Default.FormatListNumbered, "الفهرس", false) { fx.click(); nav.push(Screen.Index) }
-                        ProReaderNavButton(Icons.Default.MyLocation, "انتقال", false) { fx.click(); showJump = true }
-                        ProReaderNavButton(Icons.Default.Headphones, "استماع", false) { fx.click(); PlayerService.play(ctx, st.reciterId, surah.num); nav.push(Screen.Audio) }
-                        ProReaderNavButton(Icons.Default.Home, "الرئيسية", false) { fx.click(); nav.go(Screen.Home) }
-                    }
-                }
-            }
-        }
-    }
-
-    if (showJump) {
-        var text by remember { mutableStateOf("") }
-        val n = text.toIntOrNull()
-        val valid = n != null && n in 1..604
-        AlertDialog(
-            onDismissRequest = { showJump = false }, shape = RoundedCornerShape(24.dp),
-            title = { Text("الانتقال إلى صفحة", fontWeight = FontWeight.ExtraBold) },
-            text = {
-                OutlinedTextField(
-                    value = text, onValueChange = { text = it.filter { c -> c.isDigit() }.take(3) },
-                    singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    label = { Text("رقم الصفحة (1 - 604)") }, isError = text.isNotEmpty() && !valid
-                )
-            },
-            confirmButton = { TextButton(enabled = valid, onClick = { showJump = false; scope.launch { pagerState.scrollToPage((n ?: 1) - 1) } }) { Text("انتقال", fontWeight = FontWeight.ExtraBold) } },
-            dismissButton = { TextButton(onClick = { showJump = false }) { Text("إلغاء") } }
-        )
-    }
-}
-
-@Composable
-private fun ProReaderNavButton(icon: ImageVector, label: String, active: Boolean, onClick: () -> Unit) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(if (active) TurquoiseAccent else EmeraldVibrant.copy(alpha = 0.65f)).clickable { onClick() }.padding(horizontal = 10.dp, vertical = 6.dp)
-    ) {
-        Icon(icon, label, tint = if (active) GoldShine else GoldSoftBg, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.height(2.dp))
-        Text(label, color = if (active) GoldShine else Color.White, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
-    }
-}
-
-@Composable
-private fun MushafPage(page: Int, theme: MushafThemeStyle, onSingleTap: () -> Unit) {
-    val ctx = LocalContext.current
-    var retry by remember { mutableIntStateOf(0) }
-    var urlIdx by remember(page, retry) { mutableIntStateOf(0) }
-    val urls = remember(page) { QuranData.pageBackupUrls(page) }
-    val surah = remember(page) { QuranData.surahForPage(page) }
-    val juz = remember(page) { QuranData.juzOfPage(page) }
-
-    var scale by remember(page) { mutableFloatStateOf(1f) }
-    var offset by remember(page) { mutableStateOf(Offset.Zero) }
-
-    val filter = remember(theme) { theme.matrix?.let { ColorFilter.colorMatrix(it) } }
-
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = theme.pagePaper,
-        border = BorderStroke(2.2.dp, theme.frameOuter),
-        shadowElevation = 6.dp,
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 8.dp, vertical = 6.dp)
-    ) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(4.dp)
-                .border(1.2.dp, theme.frameInner, RoundedCornerShape(16.dp))
-                .clip(RoundedCornerShape(16.dp))
-                .background(theme.pagePaper)
-        ) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .background(theme.headerBg)
-                    .padding(horizontal = 14.dp, vertical = 5.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "﴿ سورة ${surah.name} ﴾",
-                    color = theme.headerText,
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 12.sp
-                )
-                Text(
-                    "الجزء $juz • ${surah.type}",
-                    color = theme.frameOuter,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 11.sp
-                )
-            }
-
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(theme.frameInner.copy(alpha = 0.55f))
-            )
-
-            Box(
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .pointerInput(page) {
-                        detectTapGestures(
-                            onDoubleTap = {
-                                if (scale > 1.1f) {
-                                    scale = 1f
-                                    offset = Offset.Zero
-                                } else {
-                                    scale = 2.0f
-                                }
-                            },
-                            onTap = { onSingleTap() }
-                        )
-                    }
-                    .pointerInput(page) {
-                        if (scale > 1.02f) {
-                            detectTransformGestures { _, pan, zoom, _ ->
-                                scale = (scale * zoom).coerceIn(1f, 2.8f)
-                                if (scale <= 1.02f) {
-                                    scale = 1f
-                                    offset = Offset.Zero
-                                } else {
-                                    offset = Offset(
-                                        (offset.x + pan.x).coerceIn(-350f, 350f),
-                                        (offset.y + pan.y).coerceIn(-450f, 450f)
-                                    )
-                                }
-                            }
-                        }
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                key(retry, urlIdx) {
-                    SubcomposeAsyncImage(
-                        model = ImageRequest.Builder(ctx)
-                            .data(urls[urlIdx.coerceIn(0, urls.lastIndex)])
-                            .crossfade(true)
-                            .diskCachePolicy(CachePolicy.ENABLED)
-                            .memoryCachePolicy(CachePolicy.ENABLED)
-                            .build(),
-                        contentDescription = "صفحة $page",
-                        contentScale = ContentScale.Fit,
-                        colorFilter = filter,
+                    LinearProgressIndicator(
+                        progress = { (todayRead / st.dailyGoal.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f) },
+                        color = EmeraldVibrant,
+                        trackColor = p.border.copy(alpha = 0.45f),
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                            .graphicsLayer(
-                                scaleX = scale,
-                                scaleY = scale,
-                                translationX = offset.x,
-                                translationY = offset.y
-                            ),
-                        loading = {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(color = GoldWarm)
-                            }
-                        },
-                        error = {
-                            if (urlIdx + 1 < urls.size) {
-                                LaunchedEffect(urlIdx) { urlIdx++ }
-                            } else {
-                                Column(
-                                    Modifier.fillMaxSize(),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
-                                ) {
-                                    Icon(Icons.Default.Refresh, null, tint = GoldWarm, modifier = Modifier.size(40.dp))
-                                    Spacer(Modifier.height(8.dp))
-                                    Text(
-                                        "تعذر تحميل الصفحة $page",
-                                        color = if (theme.isDark) Color.White else InkDark,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(Modifier.height(8.dp))
-                                    Button(
-                                        onClick = { retry++ },
-                                        colors = ButtonDefaults.buttonColors(containerColor = EmeraldVibrant)
-                                    ) {
-                                        Text("إعادة المحاولة", color = GoldSoftBg, fontWeight = FontWeight.ExtraBold)
-                                    }
-                                }
-                            }
-                        }
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(CircleShape)
+                    )
+                }
+            }
+        }
+
+        // 4. شبكة الوصول السريع المتوازنة لجميع أقسام التطبيق
+        item {
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                SectionTitle("أقسام التطبيق")
+
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    QuickTile(
+                        title = "فهرس السور",
+                        subtitle = "114 سورة • 30 جزءاً",
+                        icon = Icons.AutoMirrored.Filled.MenuBook,
+                        accent = EmeraldVibrant,
+                        modifier = Modifier.weight(1f)
+                    ) { nav.indexTab = 0; nav.push(Screen.Index) }
+
+                    QuickTile(
+                        title = "المكتبة الصوتية",
+                        subtitle = "${QuranData.reciters.size} قارئاً • بدون نت",
+                        icon = Icons.Default.Headphones,
+                        accent = TurquoiseAccent,
+                        modifier = Modifier.weight(1f)
+                    ) { nav.push(Screen.Audio) }
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    QuickTile(
+                        title = "مواقيت الصلاة",
+                        subtitle = "15 مؤذناً • القبلة",
+                        icon = Icons.Default.Mosque,
+                        accent = GoldWarm,
+                        modifier = Modifier.weight(1f)
+                    ) { nav.push(Screen.Prayer) }
+
+                    QuickTile(
+                        title = "الأذكار والمسبحة",
+                        subtitle = "الصباح • المساء • النوم",
+                        icon = Icons.Default.Spa,
+                        accent = Color(0xFF0F766E),
+                        modifier = Modifier.weight(1f)
+                    ) { nav.tasbihTab = 1; nav.push(Screen.Tasbih) }
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    QuickTile(
+                        title = "مركز الحفظ",
+                        subtitle = "اختبارات • سجل السور",
+                        icon = Icons.Default.Psychology,
+                        accent = RoyalForest,
+                        modifier = Modifier.weight(1f)
+                    ) { nav.push(Screen.Hifz) }
+
+                    QuickTile(
+                        title = "الإعدادات",
+                        subtitle = "المظهر • الخط • التنبيهات",
+                        icon = Icons.Default.Tune,
+                        accent = Color(0xFF334155),
+                        modifier = Modifier.weight(1f)
+                    ) { nav.push(Screen.Settings) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickTile(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val p = LocalPalette.current
+    val fx = LocalFx.current
+    Surface(
+        onClick = { fx.click(); onClick() },
+        shape = RoundedCornerShape(20.dp),
+        color = p.card,
+        border = BorderStroke(1.dp, p.border),
+        shadowElevation = 2.dp,
+        modifier = modifier
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(accent.copy(alpha = 0.14f))
+            ) {
+                Icon(icon, null, tint = accent, modifier = Modifier.size(22.dp))
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(title, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = p.ink)
+            Spacer(Modifier.height(2.dp))
+            Text(subtitle, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = p.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+// ============================================================
+// 2. فهرس السور والأجزاء والبحث السريع (IndexScreen)
+// ============================================================
+@Composable
+fun IndexScreen(nav: Nav) {
+    val p = LocalPalette.current
+    val fx = LocalFx.current
+    var query by remember { mutableStateOf("") }
+    var typeFilter by remember { mutableIntStateOf(0) }
+
+    val filteredSurahs = remember(query, typeFilter) {
+        QuranData.search(query).filter { s ->
+            when (typeFilter) {
+                1 -> s.type == "مكية"
+                2 -> s.type == "مدنية"
+                else -> true
+            }
+        }
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        ScreenHeader(
+            title = "المصحف الشريف",
+            onBack = { nav.back() },
+            trailing = {
+                IconButton(onClick = { fx.click(); nav.push(Screen.Bookmarks) }) {
+                    Icon(Icons.Default.Bookmarks, "المفضلة", tint = GoldShine)
+                }
+            }
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf("السور (114)", "الأجزاء (30)").forEachIndexed { idx, label ->
+                FilterChip(
+                    selected = nav.indexTab == idx,
+                    onClick = { fx.click(); nav.indexTab = idx },
+                    label = { Text(label, fontWeight = FontWeight.ExtraBold) },
+                    shape = RoundedCornerShape(14.dp),
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = EmeraldVibrant,
+                        selectedLabelColor = GoldShine
+                    )
+                )
+            }
+        }
+
+        if (nav.indexTab == 0) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                placeholder = { Text("ابحث باسم السورة أو رقمها...", fontSize = 13.sp, fontWeight = FontWeight.Bold) },
+                leadingIcon = { Icon(Icons.Default.Search, null, tint = EmeraldVibrant) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { query = "" }) { Icon(Icons.Default.Close, "مسح") }
+                    }
+                },
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp)
+            )
+
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("الكل", "مكية", "مدنية").forEachIndexed { i, t ->
+                    FilterChip(
+                        selected = typeFilter == i,
+                        onClick = { fx.click(); typeFilter = i },
+                        label = { Text(t, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold) },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = GoldWarm,
+                            selectedLabelColor = RoyalForest
+                        )
                     )
                 }
             }
 
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .background(theme.headerBg)
-                    .padding(vertical = 3.dp),
-                contentAlignment = Alignment.Center
+            LazyColumn(
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    "﴾ $page ﴿",
-                    color = theme.headerText,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 11.sp
-                )
+                if (filteredSurahs.isEmpty()) {
+                    item { EmptyState(Icons.Default.SearchOff, "لا توجد سورة مطابقة لبحثك") }
+                }
+                items(filteredSurahs, key = { it.num }) { s ->
+                    QCard(
+                        shape = RoundedCornerShape(18.dp),
+                        onClick = { nav.openPage(s.page) }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            NumberBadge(s.num, 38)
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "سُورَةُ ${s.name}",
+                                    fontFamily = UthmanicFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 19.sp,
+                                    color = p.ink
+                                )
+                                Text(
+                                    text = "${s.type} • ${s.ayahs} آية",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = p.muted
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = EmeraldVibrant.copy(alpha = 0.12f)
+                            ) {
+                                Text(
+                                    text = "ص ${s.page}",
+                                    color = EmeraldVibrant,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            LazyColumn(
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(QuranData.ajza, key = { it.num }) { j ->
+                    QCard(
+                        shape = RoundedCornerShape(18.dp),
+                        onClick = { nav.openPage(j.page) }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            NumberBadge(j.num, 38)
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(j.name, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = p.ink)
+                                Text("يبدأ بسورة ${j.startSurah}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = p.muted)
+                            }
+                            Text("ص ${j.page}", color = TurquoiseAccent, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 // ============================================================
-// 3. الفهرس والمفضلة (IndexScreen & FavoritesScreen)
+// 3. قارئ صفحات المصحف الشريف التفاعلي (ReaderScreen)
 // ============================================================
+private object MushafPageLoader {
+    private val cache = mutableMapOf<Int, String>()
+
+    suspend fun loadPageText(page: Int): String = withContext(Dispatchers.IO) {
+        cache[page]?.let { return@withContext it }
+        runCatching {
+            val json = URL("https://api.alquran.cloud/v1/page/$page/quran-uthmani").readText()
+            val ayahs = JSONObject(json).getJSONObject("data").getJSONArray("ayahs")
+            val sb = StringBuilder()
+            var lastSurahNum = -1
+            for (i in 0 until ayahs.length()) {
+                val obj = ayahs.getJSONObject(i)
+                val surahObj = obj.getJSONObject("surah")
+                val sNum = surahObj.getInt("number")
+                val sName = surahObj.getString("name")
+                val numInSurah = obj.getInt("numberInSurah")
+                var text = obj.getString("text")
+
+                if (sNum != lastSurahNum) {
+                    if (sb.isNotEmpty()) sb.append("\n\n")
+                    sb.append("﴿ $sName ﴾\n")
+                    if (sNum != 1 && sNum != 9 && numInSurah == 1) {
+                        sb.append("بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ\n")
+                        text = text.removePrefix("بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ").trim()
+                    }
+                    lastSurahNum = sNum
+                }
+                sb.append("$text ﴿$numInSurah﴾ ")
+            }
+            val result = sb.toString().trim()
+            cache[page] = result
+            result
+        }.getOrElse {
+            "تعذر تحميل نص الصفحة $page — يرجى التحقق من اتصال الإنترنت عند الفتح لأول مرة."
+        }
+    }
+}
+
 @Composable
-fun IndexScreen(nav: Nav) {
+fun ReaderScreen(nav: Nav) {
     val st = LocalApp.current
     val p = LocalPalette.current
     val fx = LocalFx.current
     val ctx = LocalContext.current
-    var tab by remember { mutableIntStateOf(0) }
-    var query by remember { mutableStateOf("") }
-    var typeFilter by remember { mutableStateOf("الكل") }
-    val list = remember(query, typeFilter) { QuranData.search(query).filter { typeFilter == "الكل" || it.type == typeFilter } }
+    val scope = rememberCoroutineScope()
 
-    Column(Modifier.fillMaxSize()) {
-        ScreenHeader("الفهرس", onBack = { nav.back() })
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("السور (114)", "الأجزاء (30)").forEachIndexed { i, label ->
-                FilterChip(selected = tab == i, onClick = { fx.click(); tab = i }, label = { Text(label, fontWeight = FontWeight.ExtraBold) }, shape = RoundedCornerShape(16.dp), colors = FilterChipDefaults.filterChipColors(selectedContainerColor = EmeraldVibrant, selectedLabelColor = GoldSoftBg))
+    val pagerState = rememberPagerState(
+        initialPage = (nav.readerPage - 1).coerceIn(0, 603),
+        pageCount = { 604 }
+    )
+
+    val currentPage = pagerState.currentPage + 1
+    val currentSurah = remember(currentPage) { QuranData.surahForPage(currentPage) }
+    val currentJuz = remember(currentPage) { QuranData.juzForPage(currentPage) }
+    val isBookmarked = currentPage in st.bookmarks
+
+    LaunchedEffect(currentPage) {
+        nav.readerPage = currentPage
+        st.markPageRead(currentPage)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(p.paper)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+    ) {
+        // شريط علوي للمصحف
+        Surface(
+            color = RoyalForest,
+            shadowElevation = 4.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { fx.click(); nav.back() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, "رجوع", tint = GoldShine)
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "سورة ${currentSurah.name}",
+                        color = Color.White,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 16.sp
+                    )
+                    Text(
+                        text = "${currentJuz.name} • صفحة $currentPage من 604",
+                        color = GoldSoftBg,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                IconButton(onClick = { fx.click(); st.mushafFontScale -= 0.1f }) {
+                    Icon(Icons.Default.TextDecrease, "تصغير الخط", tint = GoldSoftBg)
+                }
+                IconButton(onClick = { fx.click(); st.mushafFontScale += 0.1f }) {
+                    Icon(Icons.Default.TextIncrease, "تكبير الخط", tint = GoldSoftBg)
+                }
+                IconButton(onClick = { fx.click(); st.toggleBookmark(currentPage) }) {
+                    Icon(
+                        if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                        "علامة مرجعية",
+                        tint = if (isBookmarked) GoldShine else Color.White
+                    )
+                }
             }
         }
-        if (tab == 0) {
-            OutlinedTextField(
-                value = query, onValueChange = { query = it }, singleLine = true,
-                placeholder = { Text("ابحث باسم السورة أو رقمها...", fontWeight = FontWeight.Bold) },
-                leadingIcon = { Icon(Icons.Default.Search, null, tint = EmeraldVibrant) },
-                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Default.Close, "مسح") } },
-                shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)
-            )
-            LazyRow(contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(listOf("الكل", "مكية", "مدنية")) { t ->
-                    FilterChip(selected = typeFilter == t, onClick = { fx.click(); typeFilter = t }, label = { Text(t, fontWeight = FontWeight.Bold, fontSize = 12.sp) }, shape = RoundedCornerShape(14.dp), colors = FilterChipDefaults.filterChipColors(selectedContainerColor = GoldWarm, selectedLabelColor = RoyalForest))
-                }
+
+        // صفحات المصحف القابلة للتمرير الأفقي
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) { pageIndex ->
+            val pageNum = pageIndex + 1
+            var pageText by remember(pageNum) { mutableStateOf<String?>(null) }
+
+            LaunchedEffect(pageNum) {
+                pageText = MushafPageLoader.loadPageText(pageNum)
             }
-            LazyColumn(contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (list.isEmpty()) item { EmptyState(Icons.Default.SearchOff, "لا توجد سورة بهذا الاسم") }
-                items(list, key = { it.num }) { s ->
-                    QCard(shape = RoundedCornerShape(18.dp), onClick = { nav.openPage(s.page) }) {
-                        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            NumberBadge(s.num)
-                            Spacer(Modifier.width(10.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text("سورة ${s.name}", fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = p.ink)
-                                Text("${s.type} • ${s.ayahs} آية", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = p.muted)
-                            }
-                            Text("ص ${s.page}", color = TurquoiseAccent, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
-                            IconButton(onClick = { fx.click(); PlayerService.play(ctx, st.reciterId, s.num); nav.push(Screen.Audio) }, modifier = Modifier.size(36.dp)) {
-                                Icon(Icons.Default.PlayCircleOutline, "استماع", tint = GoldWarm, modifier = Modifier.size(24.dp))
-                            }
-                        }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(p.paper)
+                    .border(1.5.dp, GoldWarm.copy(alpha = 0.55f), RoundedCornerShape(20.dp))
+                    .padding(16.dp)
+            ) {
+                if (pageText == null) {
+                    CircularProgressIndicator(
+                        color = EmeraldVibrant,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = pageText!!,
+                            fontFamily = UthmanicFontFamily,
+                            color = p.mushafInk,
+                            fontSize = (22 * st.mushafFontScale).sp,
+                            lineHeight = (38 * st.mushafFontScale).sp,
+                            textAlign = TextAlign.Justify,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
             }
-        } else {
-            LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(30) { i ->
-                    val start = QuranData.juzStart[i]
-                    QCard(shape = RoundedCornerShape(18.dp), onClick = { nav.openPage(start) }) {
-                        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            NumberBadge(i + 1)
-                            Spacer(Modifier.width(10.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text("الجزء ${i + 1}", fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = p.ink)
-                                Text("يبدأ من سورة ${QuranData.surahForPage(start).name}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = p.muted)
-                            }
-                            Text("ص $start", color = TurquoiseAccent, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = GoldWarm)
+        }
+
+        // شريط سفلي للتنقل السريع والاستماع للسورة
+        Surface(
+            color = RoyalForest,
+            shadowElevation = 6.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(
+                    onClick = {
+                        fx.click()
+                        if (pagerState.currentPage > 0) {
+                            scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
                         }
-                    }
+                    },
+                    enabled = currentPage > 1
+                ) {
+                    Text("الصفحة السابقة", color = GoldSoftBg, fontWeight = FontWeight.Bold)
+                }
+
+                FilledTonalButton(
+                    onClick = {
+                        fx.click()
+                        PlayerService.play(ctx, st.reciterId, currentSurah.num)
+                        nav.push(Screen.Audio)
+                    },
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(containerColor = GoldShine)
+                ) {
+                    Icon(Icons.Default.VolumeUp, null, tint = RoyalForest, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("استمع للسورة", color = RoyalForest, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                }
+
+                TextButton(
+                    onClick = {
+                        fx.click()
+                        if (pagerState.currentPage < 603) {
+                            scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                        }
+                    },
+                    enabled = currentPage < 604
+                ) {
+                    Text("الصفحة التالية", color = GoldSoftBg, fontWeight = FontWeight.Bold)
                 }
             }
         }
     }
 }
 
+// ============================================================
+// 4. شاشة العلامات المرجعية والمفضلة (BookmarksScreen)
+// ============================================================
 @Composable
-fun FavoritesScreen(nav: Nav) {
+fun BookmarksScreen(nav: Nav) {
     val st = LocalApp.current
     val p = LocalPalette.current
     val fx = LocalFx.current
-    val favs = st.favPages.sorted()
+
     Column(Modifier.fillMaxSize()) {
-        ScreenHeader("الصفحات المحفوظة في المفضلة", onBack = { nav.back() })
-        if (favs.isEmpty()) {
-            EmptyState(Icons.Default.BookmarkBorder, "لا توجد صفحات محفوظة بعد.\nاضغط على «المفضلة» أثناء القراءة لإضافة الصفحة هنا.")
+        ScreenHeader("العلامات المرجعية", onBack = { nav.back() })
+
+        if (st.bookmarks.isEmpty()) {
+            EmptyState(Icons.Default.BookmarkBorder, "لا توجد صفحات محفوظة في المفضلة بعد")
         } else {
-            LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(favs, key = { it }) { pg ->
-                    val s = QuranData.surahForPage(pg)
-                    QCard(shape = RoundedCornerShape(18.dp), onClick = { nav.openPage(pg) }) {
-                        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Bookmark, null, tint = GoldWarm)
-                            Spacer(Modifier.width(10.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text("صفحة $pg", fontWeight = FontWeight.ExtraBold, color = p.ink)
-                                Text("سورة ${s.name} • الجزء ${QuranData.juzOfPage(pg)}", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = p.muted)
+            LazyColumn(
+                contentPadding = PaddingValues(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(st.bookmarks, key = { it }) { page ->
+                    val s = QuranData.surahForPage(page)
+                    val j = QuranData.juzForPage(page)
+                    QCard(
+                        shape = RoundedCornerShape(18.dp),
+                        onClick = { nav.openPage(page) }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            NumberBadge(page, 38)
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("صفحة $page • سورة ${s.name}", fontWeight = FontWeight.ExtraBold, color = p.ink)
+                                Text(j.name, fontSize = 12.sp, color = p.muted, fontWeight = FontWeight.Bold)
                             }
-                            IconButton(onClick = { fx.click(); st.toggleFav(pg) }) { Icon(Icons.Default.DeleteOutline, "إزالة", tint = Color(0xFFB71C1C)) }
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = GoldWarm)
+                            IconButton(onClick = { fx.click(); st.toggleBookmark(page) }) {
+                                Icon(Icons.Default.BookmarkRemove, "إزالة", tint = Color(0xFFB71C1C))
+                            }
                         }
                     }
                 }
