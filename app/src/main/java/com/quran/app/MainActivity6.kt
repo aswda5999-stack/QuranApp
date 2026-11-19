@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
@@ -20,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -32,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.delay
 
 val UthmanicFontFamily = FontFamily(
     Font(R.font.uthmanic, FontWeight.Normal),
@@ -50,81 +53,81 @@ data class DailyVerseItem(
 object DailyVerseRepository {
 
     val verses: List<DailyVerseItem> = listOf(
-        DailyVerseItem(1, "﴿بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ ۝ الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ﴾", "الفاتحة", 2, 1, "افتتح يومك بحمد الله وشكره على نعمه الظاهرة والباطنة."),
-        DailyVerseItem(2, "﴿وَمَن يَتَّقِ اللَّهَ يَجْعَل لَّهُ مَخْرَجًا ۝ وَيَرْزُقْهُ مِنْ حَيْثُ لَا يَحْتَسِبُ﴾", "الطلاق", 2, 558, "التقوى مفتاح الفرج والرزق من أبواب لم تكن في الحسبان."),
-        DailyVerseItem(3, "﴿فَاذْكُرُونِي أَذْكُرْكُمْ وَاشْكُرُوا لِي وَلَا تَكْفُرُونِ﴾", "البقرة", 152, 23, "أعظم شرف للعبد أن يذكره الله في الملأ الأعلى."),
-        DailyVerseItem(4, "﴿فَإِنَّ مَعَ الْعُسْرِ يُسْرًا ۝ إِنَّ مَعَ الْعُسْرِ يُسْرًا﴾", "الشرح", 5, 596, "لن يغلب عسرٌ يسرين؛ الفرج قريب مع كل ضيق."),
-        DailyVerseItem(5, "﴿وَإِذَا سَأَلَكَ عِبَادِي عَنِّي فَإِنِّي قَرِيبٌ ۖ أُجِيبُ دَعْوَةَ الدَّاعِ إِذَا دَعَانِ﴾", "البقرة", 186, 29, "ارفع حاجتك إلى الله بيقين، فهو أقرب إليك من حبل الوريد."),
-        DailyVerseItem(6, "﴿لَا يُكَلِّفُ اللَّهُ نَفْسًا إِلَّا وُسْعَهَا﴾", "البقرة", 286, 49, "ما ابتلاك الله بأمر إلا وقد أودع فيك القدرة على تجاوزه."),
-        DailyVerseItem(7, "﴿وَمَن يَتَوَكَّلْ عَلَى اللَّهِ فَهُوَ حَسْبُهُ﴾", "الطلاق", 3, 558, "من فوض أمره لله كفاه ما أهمه وأغناه عن الخلق."),
-        DailyVerseItem(8, "﴿أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ﴾", "الرعد", 28, 252, "السكينة الحقيقية لا تُشترى، بل تُنال بمداومة ذكر الله."),
-        DailyVerseItem(9, "﴿وَقُل رَّبِّ زِدْنِي عِلْمًا﴾", "طه", 114, 320, "العلم النافع نور يرفع صاحبه في الدنيا والآخرة."),
-        DailyVerseItem(10, "﴿إِنَّ اللَّهَ مَعَ الصَّابِرِينَ﴾", "البقرة", 153, 23, "معية الله الخاصة تحفّ أهل الصبر والثبات عند الشدائد."),
-        DailyVerseItem(11, "﴿رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ﴾", "البقرة", 201, 31, "دعاء جامع يجمع خيري الدنيا والآخرة."),
-        DailyVerseItem(12, "﴿وَلَسَوْفَ يُعْطِيكَ رَبُّكَ فَتَرْضَىٰ﴾", "الضحى", 5, 596, "عطاء الله واسع يجبر الخواطر ويحقق الأمنيات."),
-        DailyVerseItem(13, "﴿قُلْ يَا عِبَادِيَ الَّذِينَ أَسْرَفُوا عَلَىٰ أَنفُسِهِمْ لَا تَقْنَطُوا مِن رَّحْمَةِ اللَّهِ﴾", "الزمر", 53, 464, "باب التوبة مفتوح دائماً، ورحمة الله أوسع من كل ذنب."),
-        DailyVerseItem(14, "﴿إِنَّ رَبِّي قَرِيبٌ مُّجِيبٌ﴾", "هود", 61, 228, "لا تستبطئ الإجابة، فربك يسمع همسك ويعلم سرك."),
-        DailyVerseItem(15, "﴿وَعَسَىٰ أَن تَكْرَهُوا شَيْئًا وَهُوَ خَيْرٌ لَّكُمْ﴾", "البقرة", 216, 34, "تدبير الله لك خير من تدبيرك لنفسك، فارضَ بقضائه."),
-        DailyVerseItem(16, "﴿وَاصْبِرْ لِحُكْمِ رَبِّكَ فَإِنَّكَ بِأَعْيُنِنَا﴾", "الطور", 48, 525, "أنت في حفظ الله ورعايته ما دمت صابراً محتسباً."),
-        DailyVerseItem(17, "﴿ادْعُونِي أَسْتَجِبْ لَكُمْ﴾", "غافر", 60, 474, "وعدٌ إلهي لا يُخلف لمن أقبل على ربه بقلب صادق."),
-        DailyVerseItem(18, "﴿وَهُوَ مَعَكُمْ أَيْنَ مَا كُنتُمْ﴾", "الحديد", 4, 538, "استشعار معية الله يورث الطمأنينة ويمنع من المعصية."),
-        DailyVerseItem(19, "﴿إِن تَنصُرُوا اللَّهَ يَنصُرْكُمْ وَيُثَبِّتْ أَقْدَامَكُمْ﴾", "محمد", 7, 507, "انصر دين الله في نفسك وأخلاقك يثبتك الله في المواقف كلها."),
+        DailyVerseItem(1, "﴿بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ ۝ الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ﴾", "الفاتحة", 2, 1, "افتتح يومك بحمد الله وشكره على نعمه الظاهرة والباطنة، فالحمد مفتاح الزيادة والبركة."),
+        DailyVerseItem(2, "﴿وَمَن يَتَّقِ اللَّهَ يَجْعَل لَّهُ مَخْرَجًا ۝ وَيَرْزُقْهُ مِنْ حَيْثُ لَا يَحْتَسِبُ﴾", "الطلاق", 2, 558, "التقوى مفتاح الفرج والرزق من أبواب لم تكن في الحسبان؛ من راقب الله في سره وعلانيته كفاه الله ما أهمه."),
+        DailyVerseItem(3, "﴿فَاذْكُرُونِي أَذْكُرْكُمْ وَاشْكُرُوا لِي وَلَا تَكْفُرُونِ﴾", "البقرة", 152, 23, "أعظم شرف للعبد أن يذكره الله في الملأ الأعلى؛ فأدم ذكر ربك في كل أحوالك."),
+        DailyVerseItem(4, "﴿فَإِنَّ مَعَ الْعُسْرِ يُسْرًا ۝ إِنَّ مَعَ الْعُسْرِ يُسْرًا﴾", "الشرح", 5, 596, "لن يغلب عسرٌ يسرين؛ الفرج قريب ومقترن مع كل ضيق يمر بك."),
+        DailyVerseItem(5, "﴿وَإِذَا سَأَلَكَ عِبَادِي عَنِّي فَإِنِّي قَرِيبٌ ۖ أُجِيبُ دَعْوَةَ الدَّاعِ إِذَا دَعَانِ﴾", "البقرة", 186, 29, "ارفع حاجتك إلى الله بيقين، فهو سبحانه أقرب إليك من حبل الوريد ويسمع نجواك."),
+        DailyVerseItem(6, "﴿لَا يُكَلِّفُ اللَّهُ نَفْسًا إِلَّا وُسْعَهَا﴾", "البقرة", 286, 49, "ما ابتلاك الله بأمر إلا وقد أودع فيك القدرة على تجاوزه والصبر عليه."),
+        DailyVerseItem(7, "﴿وَمَن يَتَوَكَّلْ عَلَى اللَّهِ فَهُوَ حَسْبُهُ﴾", "الطلاق", 3, 558, "من فوض أمره لله بصدق كفاه ما أهمه وأغناه عن الخلق أجمعين."),
+        DailyVerseItem(8, "﴿أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ﴾", "الرعد", 28, 252, "السكينة الحقيقية لا تُشترى، بل تُنال بمداومة ذكر الله وتلاوة كتابه."),
+        DailyVerseItem(9, "﴿وَقُل رَّبِّ زِدْنِي عِلْمًا﴾", "طه", 114, 320, "العلم النافع نور يرفع صاحبه في الدنيا والآخرة، ولم يأمر الله نبيه بالاستزادة من شيء إلا منه."),
+        DailyVerseItem(10, "﴿إِنَّ اللَّهَ مَعَ الصَّابِرِينَ﴾", "البقرة", 153, 23, "معية الله الخاصة بالنصر والتأييد واللطف تحفّ أهل الصبر والثبات عند الشدائد."),
+        DailyVerseItem(11, "﴿رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ﴾", "البقرة", 201, 31, "دعاء جامع كان أكثر دعاء النبي ﷺ، يجمع خيري الدنيا والآخرة."),
+        DailyVerseItem(12, "﴿وَلَسَوْفَ يُعْطِيكَ رَبُّكَ فَتَرْضَىٰ﴾", "الضحى", 5, 596, "عطاء الله واسع يجبر الخواطر ويحقق الأمنيات فوق ما تأمل."),
+        DailyVerseItem(13, "﴿قُلْ يَا عِبَادِيَ الَّذِينَ أَسْرَفُوا عَلَىٰ أَنفُسِهِمْ لَا تَقْنَطُوا مِن رَّحْمَةِ اللَّهِ﴾", "الزمر", 53, 464, "باب التوبة مفتوح دائماً، ورحمة الله أوسع من كل ذنب مهما عظم."),
+        DailyVerseItem(14, "﴿إِنَّ رَبِّي قَرِيبٌ مُّجِيبٌ﴾", "هود", 61, 228, "لا تستبطئ الإجابة، فربك يسمع همسك ويعلم سرك ويدبر أمرك بلطفه."),
+        DailyVerseItem(15, "﴿وَعَسَىٰ أَن تَكْرَهُوا شَيْئًا وَهُوَ خَيْرٌ لَّكُمْ﴾", "البقرة", 216, 34, "تدبير الله لك خير من تدبيرك لنفسك، فارضَ بقضائه فالعاقبة للمتقين."),
+        DailyVerseItem(16, "﴿وَاصْبِرْ لِحُكْمِ رَبِّكَ فَإِنَّكَ بِأَعْيُنِنَا﴾", "الطور", 48, 525, "أنت في حفظ الله ورعايته وعنايته ما دمت صابراً محتسباً."),
+        DailyVerseItem(17, "﴿ادْعُونِي أَسْتَجِبْ لَكُمْ﴾", "غافر", 60, 474, "وعدٌ إلهي لا يُخلف لمن أقبل على ربه بقلب صادق خاشع."),
+        DailyVerseItem(18, "﴿وَهُوَ مَعَكُمْ أَيْنَ مَا كُنتُمْ﴾", "الحديد", 4, 538, "استشعار معية الله وعلمه يورث الطمأنينة في الخلوات والجلوات."),
+        DailyVerseItem(19, "﴿إِن تَنصُرُوا اللَّهَ يَنصُرْكُمْ وَيُثَبِّتْ أَقْدَامَكُمْ﴾", "محمد", 7, 507, "انصر دين الله في نفسك وأخلاقك وطاعتك يثبتك الله في المواقف كلها."),
         DailyVerseItem(20, "﴿لَئِن شَكَرْتُمْ لَأَزِيدَنَّكُمْ﴾", "إبراهيم", 7, 256, "الشكر قيد النعم الموجودة وصيد النعم المفقودة."),
-        DailyVerseItem(21, "﴿رَبِّ اشْرَحْ لِي صَدْرِي ۝ وَيَسِّرْ لِي أَمْرِي﴾", "طه", 25, 313, "دعاء مبارك لتيسير الأمور الصعبة وانشراح الصدر."),
-        DailyVerseItem(22, "﴿وَمَا تَوْفِيقِي إِلَّا بِاللَّهِ ۚ عَلَيْهِ تَوَكَّلْتُ وَإِلَيْهِ أُنِيبُ﴾", "هود", 88, 231, "كل نجاح وتيسير في حياتك هو محض توفيق من الله."),
-        DailyVerseItem(23, "﴿إِنَّ اللَّهَ لَا يُضِيعُ أَجْرَ الْمُحْسِنِينَ﴾", "التوبة", 120, 206, "كل معروف تقدمه ولو صغر محفوظ عند الله."),
-        DailyVerseItem(24, "﴿فَسَبِّحْ بِحَمْدِ رَبِّكَ وَكُن مِّنَ السَّاجِدِينَ﴾", "الحجر", 98, 267, "التسبيح والسجود دواء القلوب عند ضيق الصدر."),
-        DailyVerseItem(25, "﴿وَأَحْسِنُوا ۛ إِنَّ اللَّهَ يُحِبُّ الْمُحْسِنِينَ﴾", "البقرة", 195, 30, "الإحسان في القول والعمل يجلب محبة الله والناس."),
-        DailyVerseItem(26, "﴿حَسْبُنَا اللَّهُ وَنِعْمَ الْوَكِيلُ﴾", "آل عمران", 173, 73, "كلمة قيلت عند الشدائد فانقلبت بها المحن إلى منح."),
-        DailyVerseItem(27, "﴿رَبَّنَا لَا تُزِغْ قُلُوبَنَا بَعْدَ إِذْ هَدَيْتَنَا وَهَبْ لَنَا مِن لَّدُنكَ رَحْمَةً﴾", "آل عمران", 8, 50, "الثبات على الهداية أعظم نعمة يسألها المؤمن ربه."),
-        DailyVerseItem(28, "﴿وَقُولُوا لِلنَّاسِ حُسْنًا﴾", "البقرة", 83, 12, "الكلمة الطيبة صدقة تفتح القلوب وتُذهب الشحناء."),
+        DailyVerseItem(21, "﴿رَبِّ اشْرَحْ لِي صَدْرِي ۝ وَيَسِّرْ لِي أَمْرِي﴾", "طه", 25, 313, "دعاء مبارك لتيسير الأمور الصعبة وانشراح الصدر عند كل مهمة."),
+        DailyVerseItem(22, "﴿وَمَا تَوْفِيقِي إِلَّا بِاللَّهِ ۚ عَلَيْهِ تَوَكَّلْتُ وَإِلَيْهِ أُنِيبُ﴾", "هود", 88, 231, "كل نجاح وتيسير في حياتك هو محض توفيق وفضل من الله وحده."),
+        DailyVerseItem(23, "﴿إِنَّ اللَّهَ لَا يُضِيعُ أَجْرَ الْمُحْسِنِينَ﴾", "التوبة", 120, 206, "كل معروف تقدمه ولو صغر محفوظ عند الله لا يضيع مثقال ذرة منه."),
+        DailyVerseItem(24, "﴿فَسَبِّحْ بِحَمْدِ رَبِّكَ وَكُن مِّنَ السَّاجِدِينَ﴾", "الحجر", 98, 267, "التسبيح والسجود دواء القلوب وأعظم علاج لضيق الصدر."),
+        DailyVerseItem(25, "﴿وَأَحْسِنُوا ۛ إِنَّ اللَّهَ يُحِبُّ الْمُحْسِنِينَ﴾", "البقرة", 195, 30, "الإحسان في القول والعمل يجلب محبة الله ويفتح أبواب القبول."),
+        DailyVerseItem(26, "﴿حَسْبُنَا اللَّهُ وَنِعْمَ الْوَكِيلُ﴾", "آل عمران", 173, 73, "كلمة قيلت عند الشدائد فانقلبت بها المحن إلى منح والأخوف إلى أمان."),
+        DailyVerseItem(27, "﴿رَبَّنَا لَا تُزِغْ قُلُوبَنَا بَعْدَ إِذْ هَدَيْتَنَا وَهَبْ لَنَا مِن لَّدُنكَ رَحْمَةً﴾", "آل عمران", 8, 50, "الثبات على الهداية أعظم نعمة يسألها المؤمن ربه في كل حين."),
+        DailyVerseItem(28, "﴿وَقُولُوا لِلنَّاسِ حُسْنًا﴾", "البقرة", 83, 12, "الكلمة الطيبة صدقة تفتح القلوب وتُذهب الشحناء وتنشر الألفة."),
         DailyVerseItem(29, "﴿إِنَّ الصَّلَاةَ تَنْهَىٰ عَنِ الْفَحْشَاءِ وَالْمُنكَرِ﴾", "العنكبوت", 45, 401, "الصلاة الخاشعة حصن يحمي قلبك وسلوكك طوال اليوم."),
-        DailyVerseItem(30, "﴿يَا أَيُّهَا الَّذِينَ آمَنُوا اسْتَعِينُوا بِالصَّبْرِ وَالصَّلَاةِ﴾", "البقرة", 153, 23, "أقوى سلاحين لمواجهة أعباء الحياة: الصبر والصلاة."),
-        DailyVerseItem(31, "﴿وَمَا أُوتِيتُم مِّنَ الْعِلْمِ إِلَّا قَلِيلًا﴾", "الإسراء", 85, 290, "التواضع أمام عظمة علم الله سمة العقلاء."),
-        DailyVerseItem(32, "﴿وَلَا تَيْأَسُوا مِن رَّوْحِ اللَّهِ﴾", "يوسف", 87, 246, "مهما اشتدت الظلمة، ففجر الفرج قادم بإذن الله."),
-        DailyVerseItem(33, "﴿إِنَّ رَحْمَتَ اللَّهِ قَرِيبٌ مِّنَ الْمُحْسِنِينَ﴾", "الأعراف", 56, 157, "أحسن في عبادتك ومعاملاتك لتنال قرب رحمة الله."),
-        DailyVerseItem(34, "﴿وَمَن يُؤْمِن بِاللَّهِ يَهْدِ قَلْبَهُ﴾", "التغابن", 11, 557, "الإيمان يملأ القلب بالرضا والسكينة عند المصائب."),
-        DailyVerseItem(35, "﴿فَاصْبِرْ صَبْرًا جَمِيلًا﴾", "المعارج", 5, 568, "الصبر الجميل هو الصبر بلا شكوى للخلق ولا جزع."),
-        DailyVerseItem(36, "﴿وَخَلَقْنَاكُمْ أَزْوَاجًا﴾", "النبأ", 8, 582, "المودة والرحمة بين الزوجين آية من آيات الله."),
-        DailyVerseItem(37, "﴿رَبِّ اجْعَلْنِي مُقِيمَ الصَّلَاةِ وَمِن ذُرِّيَّتِي﴾", "إبراهيم", 40, 260, "اجعل الدعاء بصلاح الذرية ورداً ثابتاً في سجودك."),
-        DailyVerseItem(38, "﴿وَبِالْوَالِدَيْنِ إِحْسَانًا﴾", "الإسراء", 23, 284, "برّ الوالدين باب مفتوح للبركة والتوفيق في الدنيا والآخرة."),
-        DailyVerseItem(39, "﴿إِنَّ الْحَسَنَاتِ يُذْهِبْنَ السَّيِّئَاتِ﴾", "هود", 114, 234, "أتبع السيئة بالحسنة تمحُها وتجدد نقاء قلبك."),
-        DailyVerseItem(40, "﴿وَتَعَاوَنُوا عَلَى الْبِرِّ وَالتَّقْوَىٰ﴾", "المائدة", 2, 106, "كن عوناً لغيرك في الخير يكن الله في عونك."),
-        DailyVerseItem(41, "﴿ادْفَعْ بِالَّتِي هِيَ أَحْسَنُ﴾", "فصلت", 34, 480, "مقابلة الإساءة بالإحسان تطفئ العداوات وتكسب القلوب."),
-        DailyVerseItem(42, "﴿إِنَّ أَكْرَمَكُمْ عِندَ اللَّهِ أَتْقَاكُمْ﴾", "الحجرات", 13, 517, "ميزان التفاضل عند الله هو التقوى وصلاح القلب."),
-        DailyVerseItem(43, "﴿وَمَا كَانَ اللَّهُ مُعَذِّبَهُمْ وَهُمْ يَسْتَغْفِرُونَ﴾", "الأنفال", 33, 180, "الاستغفار أمانٌ من البلاء ومفتاح للخيرات."),
-        DailyVerseItem(44, "﴿رَبَّنَا اغْفِرْ لَنَا ذُنُوبَنَا وَإِسْرَافَنَا فِي أَمْرِنَا﴾", "آل عمران", 147, 68, "الاعتراف بالتقصير وطلب المغفرة طريق النجاة."),
-        DailyVerseItem(45, "﴿وَقُل رَّبِّ أَدْخِلْنِي مُدْخَلَ صِدْقٍ وَأَخْرِجْنِي مُخْرَجَ صِدْقٍ﴾", "الإسراء", 80, 290, "دعاء عظيم لكل بداية جديدة أو سفر أو عمل."),
+        DailyVerseItem(30, "﴿يَا أَيُّهَا الَّذِينَ آمَنُوا اسْتَعِينُوا بِالصَّبْرِ وَالصَّلَاةِ﴾", "البقرة", 153, 23, "أقوى سلاحين لمواجهة أعباء الحياة ومصاعبها: الصبر والصلاة."),
+        DailyVerseItem(31, "﴿وَمَا أُوتِيتُم مِّنَ الْعِلْمِ إِلَّا قَلِيلًا﴾", "الإسراء", 85, 290, "التواضع أمام عظمة علم الله سمة العقلاء والعلماء."),
+        DailyVerseItem(32, "﴿وَلَا تَيْأَسُوا مِن رَّوْحِ اللَّهِ﴾", "يوسف", 87, 246, "مهما اشتدت الظلمة وتأخرت الأسباب، ففجر الفرج قادم بإذن الله."),
+        DailyVerseItem(33, "﴿إِنَّ رَحْمَتَ اللَّهِ قَرِيبٌ مِّنَ الْمُحْسِنِينَ﴾", "الأعراف", 56, 157, "أحسن في عبادتك ومعاملاتك لتنال قرب رحمة الله ولطفه."),
+        DailyVerseItem(34, "﴿وَمَن يُؤْمِن بِاللَّهِ يَهْدِ قَلْبَهُ﴾", "التغابن", 11, 557, "الإيمان الصادق يملأ القلب بالرضا والسكينة عند نزول المصائب."),
+        DailyVerseItem(35, "﴿فَاصْبِرْ صَبْرًا جَمِيلًا﴾", "المعارج", 5, 568, "الصبر الجميل هو الصبر بلا شكوى للخلق ولا جزع، مع حسن الظن بالله."),
+        DailyVerseItem(36, "﴿وَخَلَقْنَاكُمْ أَزْوَاجًا﴾", "النبأ", 8, 582, "المودة والرحمة والسكن بين الزوجين آية عظيمة من آيات الله."),
+        DailyVerseItem(37, "﴿رَبِّ اجْعَلْنِي مُقِيمَ الصَّلَاةِ وَمِن ذُرِّيَّتِي﴾", "إبراهيم", 40, 260, "اجعل الدعاء بصلاح الذرية وإقامتهم للصلاة ورداً ثابتاً في سجودك."),
+        DailyVerseItem(38, "﴿وَبِالْوَالِدَيْنِ إِحْسَانًا﴾", "الإسراء", 23, 284, "برّ الوالدين باب مفتوح للبركة والتوفيق وسعة الرزق في الدنيا والآخرة."),
+        DailyVerseItem(39, "﴿إِنَّ الْحَسَنَاتِ يُذْهِبْنَ السَّيِّئَاتِ﴾", "هود", 114, 234, "أتبع السيئة بالحسنة تمحُها وتجدد نقاء قلبك وإشراقه."),
+        DailyVerseItem(40, "﴿وَتَعَاوَنُوا عَلَى الْبِرِّ وَالتَّقْوَىٰ﴾", "المائدة", 2, 106, "كن عوناً لغيرك في الخير يكن الله في عونك وييسر أمرك."),
+        DailyVerseItem(41, "﴿ادْفَعْ بِالَّتِي هِيَ أَحْسَنُ﴾", "فصلت", 34, 480, "مقابلة الإساءة بالإحسان تطفئ العداوات وتكسب القلوب وترفع الدرجات."),
+        DailyVerseItem(42, "﴿إِنَّ أَكْرَمَكُمْ عِندَ اللَّهِ أَتْقَاكُمْ﴾", "الحجرات", 13, 517, "ميزان التفاضل الحقيقي عند الله هو التقوى وصلاح القلب والعمل."),
+        DailyVerseItem(43, "﴿وَمَا كَانَ اللَّهُ مُعَذِّبَهُمْ وَهُمْ يَسْتَغْفِرُونَ﴾", "الأنفال", 33, 180, "الاستغفار أمانٌ من البلاء ومفتاح للخيرات والأرزاق."),
+        DailyVerseItem(44, "﴿رَبَّنَا اغْفِرْ لَنَا ذُنُوبَنَا وَإِسْرَافَنَا فِي أَمْرِنَا﴾", "آل عمران", 147, 68, "الاعتراف بالتقصير وطلب المغفرة من الله طريق النجاة والنصر."),
+        DailyVerseItem(45, "﴿وَقُل رَّبِّ أَدْخِلْنِي مُدْخَلَ صِدْقٍ وَأَخْرِجْنِي مُخْرَجَ صِدْقٍ﴾", "الإسراء", 80, 290, "دعاء عظيم لكل بداية جديدة أو سفر أو عمل تبتغي فيه التوفيق."),
         DailyVerseItem(46, "﴿إِنَّ اللَّهَ وَمَلَائِكَتَهُ يُصَلُّونَ عَلَى النَّبِيِّ﴾", "الأحزاب", 56, 426, "أكثر من الصلاة على النبي ﷺ لتكفى همك ويُغفر ذنبك."),
-        DailyVerseItem(47, "﴿وَلَا تَمْشِ فِي الْأَرْضِ مَرَحًا﴾", "الإسراء", 37, 285, "التواضع رفعة، والكبر يبغضه الله والناس."),
-        DailyVerseItem(48, "﴿وَأَقِيمُوا الصَّلَاةَ وَآتُوا الزَّكَاةَ﴾", "البقرة", 43, 7, "الصدقة والزكاة تطهر المال وتبارك في الرزق."),
-        DailyVerseItem(49, "﴿فَإِذَا عَزَمْتَ فَتَوَكَّلْ عَلَى اللَّهِ﴾", "آل عمران", 159, 71, "خذ بالأسباب ثم اعتمد بقلبك على الله وحده."),
-        DailyVerseItem(50, "﴿رَبِّ هَبْ لِي حُكْمًا وَأَلْحِقْنِي بِالصَّالِحِينَ﴾", "الشعراء", 83, 370, "اسأل الله الحكمة في القول والعمل وصحبة الصالحين."),
-        DailyVerseItem(51, "﴿وَمَا الْحَيَاةُ الدُّنْيَا إِلَّا مَتَاعُ الْغُرُورِ﴾", "آل عمران", 185, 74, "اعمل لآخرتك ولا تجعل الدنيا أكبر همك."),
-        DailyVerseItem(52, "﴿سَيَجْعَلُ اللَّهُ بَعْدَ عُسْرٍ يُسْرًا﴾", "الطلاق", 7, 559, "كل ضيق سيعقبه اتساع وفرج من الله لا محالة."),
-        DailyVerseItem(53, "﴿وَاللَّهُ خَيْرٌ حَافِظًا ۖ وَهُوَ أَرْحَمُ الرَّاحِمِينَ﴾", "يوسف", 64, 243, "استودع الله نفسك وأهلك ومالك، فودائعه لا تضيع."),
-        DailyVerseItem(54, "﴿إِنَّ مَعِيَ رَبِّي سَيَهْدِينِ﴾", "الشعراء", 62, 369, "قمة اليقين بالله حين تنغلق كل السبل الأرضية."),
-        DailyVerseItem(55, "﴿وَلَا تَحْزَنْ إِنَّ اللَّهَ مَعَنَا﴾", "التوبة", 40, 193, "لا مكان للحزن في قلب يوقن أن الله معه."),
-        DailyVerseItem(56, "﴿قُل لَّن يُصِيبَنَا إِلَّا مَا كَتَبَ اللَّهُ لَنَا﴾", "التوبة", 51, 195, "الرضا بالقدر يريح النفس من القلق والخوف."),
-        DailyVerseItem(57, "﴿وَأَن لَّيْسَ لِلْإِنسَانِ إِلَّا مَا سَعَىٰ﴾", "النجم", 39, 527, "اجتهد في طاعة الله وعمارة الأرض، فثمرة سعيك محفوظة."),
-        DailyVerseItem(58, "﴿إِنَّ اللَّهَ يُحِبُّ التَّوَّابِينَ وَيُحِبُّ الْمُتَطَهِّرِينَ﴾", "البقرة", 222, 35, "جدد توبتك كل يوم لتنال محبة الله."),
-        DailyVerseItem(59, "﴿رَبَّنَا هَبْ لَنَا مِنْ أَزْوَاجِنَا وَذُرِّيَّاتِنَا قُرَّةَ أَعْيُنٍ﴾", "الفرقان", 74, 366, "صلاح الأسرة نعمة لا تقدر بثمن."),
-        DailyVerseItem(60, "﴿وَاذْكُر رَّبَّكَ إِذَا نَسِيتَ﴾", "الكهف", 24, 296, "الذكر يوقظ القلب من الغفلة ويعيد له صفاءه."),
-        DailyVerseItem(61, "﴿فَفِرُّوا إِلَى اللَّهِ﴾", "الذاريات", 50, 522, "إذا ضاقت بك الدنيا فاهرب إلى الله بالصلاة والدعاء."),
-        DailyVerseItem(62, "﴿وَمَا بِكُم مِّن نِّعْمَةٍ فَمِنَ اللَّهِ﴾", "النحل", 53, 272, "انسب كل نعمة إلى المنعم سبحانه يدمها عليك."),
-        DailyVerseItem(63, "﴿إِنَّ الْأَبْرَارَ لَفِي نَعِيمٍ﴾", "الانفطار", 13, 587, "أهل الصدق والبر ينعمون بطمأنينة القلب في الدنيا والجنة في الآخرة."),
-        DailyVerseItem(64, "﴿وَقُلِ الْحَمْدُ لِلَّهِ سَيُرِيكُمْ آيَاتِهِ فَتَعْرِفُونَهَا﴾", "النمل", 93, 385, "تأمل في خلق الله وتدبيره يزدد إيمانك ويقينك."),
-        DailyVerseItem(65, "﴿رَبِّ إِنِّي لِمَا أَنزَلْتَ إِلَيَّ مِنْ خَيْرٍ فَقِيرٌ﴾", "القصص", 24, 388, "إظهار الافتقار إلى الله سبب لجلب الأرزاق والخيرات."),
-        DailyVerseItem(66, "﴿وَلَا تَقْفُ مَا لَيْسَ لَكَ بِهِ عِلْمٌ﴾", "الإسراء", 36, 285, "التثبت قبل الكلام يحفظ اللسان ويصون الأعراض."),
-        DailyVerseItem(67, "﴿إِنَّ السَّمْعَ وَالْبَصَرَ وَالْفُؤَادَ كُلُّ أُولَٰئِكَ كَانَ عَنْهُ مَسْئُولًا﴾", "الإسراء", 36, 285, "صُن جوارحك عما لا يرضي الله."),
-        DailyVerseItem(68, "﴿وَسَارِعُوا إِلَىٰ مَغْفِرَةٍ مِّن رَّبِّكُمْ وَجَنَّةٍ عَرْضُهَا السَّمَاوَاتُ وَالْأَرْضُ﴾", "آل عمران", 133, 67, "المسارعة إلى الخيرات علامة حياة القلب."),
-        DailyVerseItem(69, "﴿فَاسْتَبِقُوا الْخَيْرَاتِ﴾", "البقرة", 148, 23, "لا تؤجل عمل الخير، فالأعمار بيد الله."),
-        DailyVerseItem(70, "﴿وَالْكَاظِمِينَ الْغَيْظَ وَالْعَافِينَ عَنِ النَّاسِ ۗ وَاللَّهُ يُحِبُّ الْمُحْسِنِينَ﴾", "آل عمران", 134, 67, "العفو عند المقدرة من شيم الكرام وسبب لمحبة الله."),
-        DailyVerseItem(71, "﴿إِنَّ اللَّهَ يَأْمُرُ بِالْعَدْلِ وَالْإِحْسَانِ﴾", "النحل", 90, 277, "العدل أساس الملك، والإحسان روح التعامل."),
-        DailyVerseItem(72, "﴿وَمَن يَعْمَلْ مِثْقَالَ ذَرَّةٍ خَيْرًا يَرَهُ﴾", "الزلزلة", 7, 599, "لا تحتقرنّ من المعروف شيئاً، فالله يضاعف الحسنات."),
-        DailyVerseItem(73, "﴿أَلَمْ يَأْنِ لِلَّذِينَ آمَنُوا أَن تَخْشَعَ قُلُوبُهُمْ لِذِكْرِ اللَّهِ﴾", "الحديد", 16, 539, "آن الأوان أن يلين القلب لآيات الله ومواعظه."),
-        DailyVerseItem(74, "﴿رَبَّنَا تَقَبَّلْ مِنَّا ۖ إِنَّكَ أَنتَ السَّمِيعُ الْعَلِيمُ﴾", "البقرة", 127, 19, "الاهتمام بقبول العمل أعظم من العمل نفسه."),
-        DailyVerseItem(75, "﴿قُلْ هُوَ اللَّهُ أَحَدٌ ۝ اللَّهُ الصَّمَدُ﴾", "الإخلاص", 1, 604, "توحيد الله الخالص هو أساس النجاة وسعادة الدارين.")
+        DailyVerseItem(47, "﴿وَلَا تَمْشِ فِي الْأَرْضِ مَرَحًا﴾", "الإسراء", 37, 285, "التواضع رفعة في الدنيا والآخرة، والكبر يبغضه الله والناس."),
+        DailyVerseItem(48, "﴿وَأَقِيمُوا الصَّلَاةَ وَآتُوا الزَّكَاةَ﴾", "البقرة", 43, 7, "الصدقة والزكاة تطهر المال وتزكي النفس وتبارك في الرزق."),
+        DailyVerseItem(49, "﴿فَإِذَا عَزَمْتَ فَتَوَكَّلْ عَلَى اللَّهِ﴾", "آل عمران", 159, 71, "خذ بالأسباب المشروعة ثم اعتمد بقلبك على الله وحده."),
+        DailyVerseItem(50, "﴿رَبِّ هَبْ لِي حُكْمًا وَأَلْحِقْنِي بِالصَّالِحِينَ﴾", "الشعراء", 83, 370, "اسأل الله الحكمة في القول والعمل وصحبة الصالحين في الدارين."),
+        DailyVerseItem(51, "﴿وَمَا الْحَيَاةُ الدُّنْيَا إِلَّا مَتَاعُ الْغُرُورِ﴾", "آل عمران", 185, 74, "اعمل لآخرتك الباقية ولا تجعل الدنيا الفانية أكبر همك."),
+        DailyVerseItem(52, "﴿سَيَجْعَلُ اللَّهُ بَعْدَ عُسْرٍ يُسْرًا﴾", "الطلاق", 7, 559, "كل ضيق سيعقبه اتساع وفرج من الله لا محالة، فثق بوعد الله."),
+        DailyVerseItem(53, "﴿وَاللَّهُ خَيْرٌ حَافِظًا ۖ وَهُوَ أَرْحَمُ الرَّاحِمِينَ﴾", "يوسف", 64, 243, "استودع الله نفسك وأهلك ومالك، فودائع الله لا تضيع أبداً."),
+        DailyVerseItem(54, "﴿إِنَّ مَعِيَ رَبِّي سَيَهْدِينِ﴾", "الشعراء", 62, 369, "قمة اليقين بالله حين تنغلق كل السبل الأرضية وتشتد الكروب."),
+        DailyVerseItem(55, "﴿وَلَا تَحْزَنْ إِنَّ اللَّهَ مَعَنَا﴾", "التوبة", 40, 193, "لا مكان للحزن أو الخوف في قلب يوقن أن الله معه بناصره ولطفه."),
+        DailyVerseItem(56, "﴿قُل لَّن يُصِيبَنَا إِلَّا مَا كَتَبَ اللَّهُ لَنَا﴾", "التوبة", 51, 195, "الرضا بالقدر يريح النفس من القلق ويمدها بالقوة والطمأنينة."),
+        DailyVerseItem(57, "﴿وَأَن لَّيْسَ لِلْإِنسَانِ إِلَّا مَا سَعَىٰ﴾", "النجم", 39, 527, "اجتهد في طاعة الله وعمارة الأرض، فثمرة سعيك محفوظة عند ربك."),
+        DailyVerseItem(58, "﴿إِنَّ اللَّهَ يُحِبُّ التَّوَّابِينَ وَيُحِبُّ الْمُتَطَهِّرِينَ﴾", "البقرة", 222, 35, "جدد توبتك كل يوم وطهر قلبك وبدنك لتنال محبة الله."),
+        DailyVerseItem(59, "﴿رَبَّنَا هَبْ لَنَا مِنْ أَزْوَاجِنَا وَذُرِّيَّاتِنَا قُرَّةَ أَعْيُنٍ﴾", "الفرقان", 74, 366, "صلاح الأسرة واستقامتها نعمة عظيمة لا تقدر بثمن."),
+        DailyVerseItem(60, "﴿وَاذْكُر رَّبَّكَ إِذَا نَسِيتَ﴾", "الكهف", 24, 296, "الذكر يوقظ القلب من الغفلة ويعيد له صفاءه واتصاله بالله."),
+        DailyVerseItem(61, "﴿فَفِرُّوا إِلَى اللَّهِ﴾", "الذاريات", 50, 522, "إذا ضاقت بك الدنيا فاهرب إلى الله بالصلاة والدعاء والاستغفار."),
+        DailyVerseItem(62, "﴿وَمَا بِكُم مِّن نِّعْمَةٍ فَمِنَ اللَّهِ﴾", "النحل", 53, 272, "انسب كل نعمة إلى المنعم سبحانه يدمها عليك ويبارك لك فيها."),
+        DailyVerseItem(63, "﴿إِنَّ الْأَبْرَارَ لَفِي نَعِيمٍ﴾", "الانفطار", 13, 587, "أهل الصدق والبر ينعمون بطمأنينة القلب في الدنيا وجنات النعيم في الآخرة."),
+        DailyVerseItem(64, "﴿وَقُلِ الْحَمْدُ لِلَّهِ سَيُرِيكُمْ آيَاتِهِ فَتَعْرِفُونَهَا﴾", "النمل", 93, 385, "تأمل في خلق الله وتدبيره يزدد إيمانك ويقينك بعظمته."),
+        DailyVerseItem(65, "﴿رَبِّ إِنِّي لِمَا أَنزَلْتَ إِلَيَّ مِنْ خَيْرٍ فَقِيرٌ﴾", "القصص", 24, 388, "إظهار الافتقار والانكسار بين يدي الله سبب لجلب الأرزاق والخيرات."),
+        DailyVerseItem(66, "﴿وَلَا تَقْفُ مَا لَيْسَ لَكَ بِهِ عِلْمٌ﴾", "الإسراء", 36, 285, "التثبت قبل الكلام ونقل الأخبار يحفظ اللسان ويصون الأعراض."),
+        DailyVerseItem(67, "﴿إِنَّ السَّمْعَ وَالْبَصَرَ وَالْفُؤَادَ كُلُّ أُولَٰئِكَ كَانَ عَنْهُ مَسْئُولًا﴾", "الإسراء", 36, 285, "صُن جوارحك عما لا يرضي الله، فإنها شاهدة عليك يوم القيامة."),
+        DailyVerseItem(68, "﴿وَسَارِعُوا إِلَىٰ مَغْفِرَةٍ مِّن رَّبِّكُمْ وَجَنَّةٍ عَرْضُهَا السَّمَاوَاتُ وَالْأَرْضُ﴾", "آل عمران", 133, 67, "المسارعة إلى الخيرات والتوبة علامة حياة القلب ويقظته."),
+        DailyVerseItem(69, "﴿فَاسْتَبِقُوا الْخَيْرَاتِ﴾", "البقرة", 148, 23, "لا تؤجل عمل الخير، فالأعمار بيد الله والفرص تمر مر السحاب."),
+        DailyVerseItem(70, "﴿وَالْكَاظِمِينَ الْغَيْظَ وَالْعَافِينَ عَنِ النَّاسِ ۗ وَاللَّهُ يُحِبُّ الْمُحْسِنِينَ﴾", "آل عمران", 134, 67, "العفو عند المقدرة وكظم الغيظ من شيم الكرام وسبب لمحبة الله."),
+        DailyVerseItem(71, "﴿إِنَّ اللَّهَ يَأْمُرُ بِالْعَدْلِ وَالْإِحْسَانِ﴾", "النحل", 90, 277, "العدل أساس الملك، والإحسان روح التعامل مع الخلق."),
+        DailyVerseItem(72, "﴿وَمَن يَعْمَلْ مِثْقَالَ ذَرَّةٍ خَيْرًا يَرَهُ﴾", "الزلزلة", 7, 599, "لا تحتقرنّ من المعروف شيئاً، فالله يضاعف الحسنات ويجزي عليها."),
+        DailyVerseItem(73, "﴿أَلَمْ يَأْنِ لِلَّذِينَ آمَنُوا أَن تَخْشَعَ قُلُوبُهُمْ لِذِكْرِ اللَّهِ﴾", "الحديد", 16, 539, "آن الأوان أن يلين القلب لآيات الله ومواعظه ويهتدي بنوره."),
+        DailyVerseItem(74, "﴿رَبَّنَا تَقَبَّلْ مِنَّا ۖ إِنَّكَ أَنتَ السَّمِيعُ الْعَلِيمُ﴾", "البقرة", 127, 19, "الاهتمام بقبول العمل أعظم من العمل نفسه؛ فاسأل الله القبول دائماً."),
+        DailyVerseItem(75, "﴿قُلْ هُوَ اللَّهُ أَحَدٌ ۝ اللَّهُ الصَّمَدُ﴾", "الإخلاص", 1, 604, "توحيد الله الخالص هو أساس النجاة وسعادة الدارين، وهذه السورة تعدل ثلث القرآن.")
     )
 
     fun getTodayIndex(): Int {
@@ -148,25 +151,37 @@ fun DailyVerseCard(
     val fx = LocalFx.current
     val verse = remember { DailyVerseRepository.getTodayVerse() }
     var showExplanationSheet by remember { mutableStateOf(false) }
+    var isCopied by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isCopied) {
+        if (isCopied) {
+            delay(1800)
+            isCopied = false
+        }
+    }
 
     Surface(
-        shape = RoundedCornerShape(20.dp),
-        border = BorderStroke(1.3.dp, GoldWarm),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.2.dp, GoldWarm.copy(alpha = 0.85f)),
         shadowElevation = 4.dp,
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
     ) {
-        Box(Modifier.background(Brush.linearGradient(listOf(RoyalForest, TealStart, TealEnd)))) {
+        Box(
+            Modifier.background(
+                Brush.linearGradient(listOf(RoyalForest, EmeraldVibrant, TealStart))
+            )
+        ) {
             IslamicPattern(Modifier.matchParentSize())
 
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                    .padding(horizontal = 13.dp, vertical = 10.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // شريط علوي مضغوط: العنوان + اسم السورة ورقم الآية
+                // شريط علوي مضغوط: شارة آية اليوم + اسم السورة ورقم الآية
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -174,50 +189,50 @@ fun DailyVerseCard(
                 ) {
                     Surface(
                         shape = CircleShape,
-                        color = GoldShine.copy(alpha = 0.16f),
-                        border = BorderStroke(1.dp, GoldShine.copy(alpha = 0.65f))
+                        color = GoldShine.copy(alpha = 0.15f),
+                        border = BorderStroke(0.9.dp, GoldShine.copy(alpha = 0.65f))
                     ) {
                         Text(
                             text = "✦ آيَةُ الْيَوْمِ ✦",
                             fontFamily = UthmanicFontFamily,
                             color = GoldShine,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp)
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 1.dp)
                         )
                     }
 
                     Text(
                         text = "سُورَةُ ${verse.surah} • آيَةٌ ${verse.ayahNumber}",
                         fontFamily = UthmanicFontFamily,
-                        color = GoldSoftBg,
-                        fontSize = 14.sp,
+                        color = GoldSoftBg.copy(alpha = 0.92f),
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(7.dp))
 
-                // نص الآية الكريمة بحجم متناسق
+                // نص الآية الكريمة بحجم متناسق ومريح للعين
                 Text(
                     text = verse.text,
                     fontFamily = UthmanicFontFamily,
                     color = Color.White,
-                    fontSize = 21.sp,
+                    fontSize = 19.sp,
                     fontWeight = FontWeight.Normal,
                     textAlign = TextAlign.Center,
-                    lineHeight = 36.sp,
+                    lineHeight = 32.sp,
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
 
                 HorizontalDivider(
                     thickness = 0.6.dp,
-                    color = GoldShine.copy(alpha = 0.25f)
+                    color = GoldShine.copy(alpha = 0.22f)
                 )
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(7.dp))
 
                 // الشريط السفلي: أيقونات صغيرة (نسخ - مشاركة - عرض) + زر شرح متطور
                 Row(
@@ -226,16 +241,18 @@ fun DailyVerseCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         CompactVerseAction(
-                            icon = Icons.Default.ContentCopy,
-                            label = "نسخ"
+                            icon = if (isCopied) Icons.Default.Check else Icons.Default.ContentCopy,
+                            label = if (isCopied) "نُسخت" else "نسخ",
+                            tint = if (isCopied) Color(0xFF4ADE80) else GoldShine
                         ) {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             val copyText = "${verse.text}\n[سورة ${verse.surah}: ${verse.ayahNumber}]"
                             clipboard.setPrimaryClip(ClipData.newPlainText("Ayah", copyText))
+                            isCopied = true
                             Toast.makeText(context, "تم نسخ الآية", Toast.LENGTH_SHORT).show()
                         }
 
@@ -258,9 +275,9 @@ fun DailyVerseCard(
                     Surface(
                         onClick = { fx.click(); showExplanationSheet = true },
                         shape = RoundedCornerShape(12.dp),
-                        shadowElevation = 3.dp,
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)),
-                        color = Color.Transparent
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.55f)),
+                        color = Color.Transparent,
+                        modifier = Modifier.shadow(4.dp, RoundedCornerShape(12.dp))
                     ) {
                         Row(
                             modifier = Modifier
@@ -269,21 +286,21 @@ fun DailyVerseCard(
                                         listOf(GoldShine, GoldWarm)
                                     )
                                 )
-                                .padding(horizontal = 13.dp, vertical = 6.dp),
+                                .padding(horizontal = 12.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,
                                 contentDescription = "شرح الآية",
                                 tint = RoyalForest,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(13.dp)
                             )
                             Text(
                                 text = "شرح",
                                 color = RoyalForest,
                                 fontWeight = FontWeight.ExtraBold,
-                                fontSize = 12.sp
+                                fontSize = 11.5.sp
                             )
                         }
                     }
@@ -298,12 +315,12 @@ fun DailyVerseCard(
             onDismissRequest = { showExplanationSheet = false },
             containerColor = RoyalForest,
             contentColor = Color.White,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+            shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 10.dp),
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(
@@ -314,47 +331,91 @@ fun DailyVerseCard(
                         imageVector = Icons.Default.AutoAwesome,
                         contentDescription = null,
                         tint = GoldShine,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(19.dp)
                     )
                     Text(
-                        text = "تأمل وشرح آية اليوم",
+                        text = "التفسير الميسّر وتأمل الآية",
                         color = GoldShine,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.ExtraBold,
                         fontSize = 16.sp
                     )
                 }
 
+                Spacer(Modifier.height(4.dp))
+
+                Text(
+                    text = "سورة ${verse.surah} • الآية ${verse.ayahNumber} • صفحة ${verse.page}",
+                    color = GoldSoftBg.copy(alpha = 0.75f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
                 Spacer(Modifier.height(12.dp))
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(Color.White.copy(alpha = 0.08f))
-                        .padding(12.dp)
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color.White.copy(alpha = 0.08f),
+                    border = BorderStroke(1.dp, GoldWarm.copy(alpha = 0.45f)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
                         text = verse.text,
                         fontFamily = UthmanicFontFamily,
                         color = Color.White,
                         fontSize = 20.sp,
-                        lineHeight = 34.sp,
+                        lineHeight = 35.sp,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.padding(14.dp)
                     )
                 }
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(14.dp))
 
                 Text(
                     text = verse.reflection,
                     color = GoldSoftBg,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
-                    lineHeight = 25.sp,
+                    lineHeight = 26.sp,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                Spacer(Modifier.height(18.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            fx.click()
+                            shareText(context, "${verse.text}\n[سورة ${verse.surah}: ${verse.ayahNumber}]\n\nالتفسير: ${verse.reflection}")
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, GoldShine),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Share, null, tint = GoldShine, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("مشاركة مع الشرح", color = GoldShine, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+
+                    Button(
+                        onClick = {
+                            fx.click()
+                            showExplanationSheet = false
+                            nav.openPage(verse.page)
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = GoldWarm),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.MenuBook, null, tint = RoyalForest, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("عرض في المصحف", color = RoyalForest, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                    }
+                }
 
                 Spacer(Modifier.height(22.dp))
             }
@@ -366,6 +427,7 @@ fun DailyVerseCard(
 private fun CompactVerseAction(
     icon: ImageVector,
     label: String,
+    tint: Color = GoldShine,
     onClick: () -> Unit
 ) {
     val fx = LocalFx.current
@@ -374,20 +436,20 @@ private fun CompactVerseAction(
             .clip(RoundedCornerShape(10.dp))
             .background(Color.White.copy(alpha = 0.1f))
             .clickable { fx.click(); onClick() }
-            .padding(horizontal = 8.dp, vertical = 5.dp),
+            .padding(horizontal = 7.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         Icon(
             imageVector = icon,
             contentDescription = label,
-            tint = GoldShine,
-            modifier = Modifier.size(13.dp)
+            tint = tint,
+            modifier = Modifier.size(12.5.dp)
         )
         Text(
             text = label,
             color = Color.White,
-            fontSize = 10.5.sp,
+            fontSize = 10.sp,
             fontWeight = FontWeight.Bold
         )
     }
