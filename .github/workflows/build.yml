@@ -22,9 +22,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Auto-increment versionCode
         run: |
           BUILD_NUM=$((200 + GITHUB_RUN_NUMBER))
@@ -64,8 +61,12 @@ jobs:
 
       - name: Align, Sign (V1+V2+V3) & Verify APK
         run: |
-          BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -n 1)
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          BUILD_TOOLS_DIR=$(ls -d "$SDK_ROOT"/build-tools/* | sort -V | tail -n 1)
+          echo "Using build-tools: $BUILD_TOOLS_DIR"
+
           RAW_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          echo "Found raw APK: $RAW_APK"
 
           "$BUILD_TOOLS_DIR/zipalign" -v -p -f 4 "$RAW_APK" aligned.apk
 
