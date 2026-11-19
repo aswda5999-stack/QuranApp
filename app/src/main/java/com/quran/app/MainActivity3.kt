@@ -128,7 +128,6 @@ fun HomeScreen(nav: Nav) {
     val ctx = LocalContext.current
 
     val dayIdx = remember { Calendar.getInstance().get(Calendar.DAY_OF_YEAR) }
-    val verse = QuranData.dailyVerses[dayIdx % QuranData.dailyVerses.size]
     val hadith = QuranData.hadiths[dayIdx % QuranData.hadiths.size]
     val dateInfo = remember { getFullDateDetails() }
     val greetText = remember { dynamicGreeting() }
@@ -262,32 +261,9 @@ fun HomeScreen(nav: Nav) {
             }
         }
 
+        // بطاقة آية اليوم المستقلة والمتطورة من الملف السادس (MainActivity6.kt)
         item {
-            Surface(
-                onClick = { fx.click(); nav.openPage(verse.page) },
-                shape = RoundedCornerShape(26.dp),
-                border = BorderStroke(1.5.dp, GoldWarm),
-                shadowElevation = 4.dp,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-            ) {
-                Box(Modifier.background(Brush.linearGradient(listOf(RoyalForest, TealStart, TealEnd)))) {
-                    IslamicPattern(Modifier.matchParentSize())
-                    Column(Modifier.fillMaxWidth().padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Surface(shape = CircleShape, color = GoldShine.copy(alpha = 0.16f), border = BorderStroke(1.dp, GoldShine.copy(alpha = 0.6f))) {
-                            Text("✦ آية اليوم ✦", color = GoldShine, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp))
-                        }
-                        Spacer(Modifier.height(12.dp))
-                        Text(verse.text, color = Color.White, fontFamily = FontFamily.Serif, fontSize = 24.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, lineHeight = 40.sp)
-                        Spacer(Modifier.height(8.dp))
-                        Text(verse.ref, color = GoldSoftBg, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(12.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            SmallPill("اقرأ في المصحف", Icons.AutoMirrored.Filled.MenuBook) { nav.openPage(verse.page) }
-                            SmallPill("مشاركة الآية", Icons.Default.Share) { shareText(ctx, "${verse.text}\n${verse.ref}") }
-                        }
-                    }
-                }
-            }
+            DailyVerseCard(nav = nav)
         }
 
         item {
@@ -427,18 +403,6 @@ private fun SearchRow(title: String, sub: String, num: Int?, onClick: () -> Unit
     }
 }
 
-@Composable
-private fun SmallPill(text: String, icon: ImageVector, onClick: () -> Unit) {
-    val fx = LocalFx.current
-    Surface(onClick = { fx.click(); onClick() }, shape = RoundedCornerShape(16.dp), color = Color.White.copy(alpha = 0.16f), border = BorderStroke(1.dp, GoldShine.copy(alpha = 0.75f))) {
-        Row(Modifier.padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = GoldShine, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(text, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
-        }
-    }
-}
-
 // ============================================================
 // 2. قارئ المصحف الملون بالصفحات والإطارات الملكية (ReaderScreen)
 // ============================================================
@@ -465,7 +429,6 @@ private val MushafThemes = listOf(
         frameInner = Color(0xFFD9AE43),
         headerBg = Color(0xFFF6ECDA),
         headerText = Color(0xFF052920),
-        // تباين دافئ وواضح للخط مع لمسة زمردية خفيفة
         matrix = ColorMatrix(floatArrayOf(
             0.96f, 0f, 0f, 0f, 4f,
             0f, 0.94f, 0f, 0f, 2f,
@@ -483,7 +446,6 @@ private val MushafThemes = listOf(
         frameInner = Color(0xFF147A67),
         headerBg = Color(0xFFE0F2EA),
         headerText = Color(0xFF052920),
-        // صبغة زمردية ناعمة مريحة للأعصاب
         matrix = ColorMatrix(floatArrayOf(
             0.88f, 0f, 0f, 0f, 0f,
             0f, 0.97f, 0f, 0f, 4f,
@@ -518,7 +480,6 @@ private val MushafThemes = listOf(
         frameInner = Color(0xFF147A67),
         headerBg = Color(0xFF132720),
         headerText = Color(0xFFF7D97E),
-        // عكس الألوان للوضع الليلي مع تلوين الخط بالذهبي الدافئ المريح للعين
         matrix = ColorMatrix(floatArrayOf(
             -0.92f, 0f, 0f, 0f, 245f,
             0f, -0.88f, 0f, 0f, 232f,
@@ -603,7 +564,6 @@ fun ReaderScreen(nav: Nav) {
                             }
                         }
 
-                        // زر اختيار ألوان المصحف (4 ثيمات)
                         Surface(
                             onClick = { fx.click(); showThemeBar = !showThemeBar },
                             shape = CircleShape,
@@ -623,7 +583,6 @@ fun ReaderScreen(nav: Nav) {
                     }
                 }
 
-                // شريط اختيار لون صفحات المصحف الفوري
                 AnimatedVisibility(visible = showThemeBar) {
                     Surface(
                         color = RoyalForest.copy(alpha = 0.95f),
@@ -762,7 +721,6 @@ private fun MushafPage(page: Int, theme: MushafThemeStyle, onSingleTap: () -> Un
 
     val filter = remember(theme) { theme.matrix?.let { ColorFilter.colorMatrix(it) } }
 
-    // إطار المصحف الملكي الملون المزدوج حول كل صفحة
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = theme.pagePaper,
@@ -780,7 +738,6 @@ private fun MushafPage(page: Int, theme: MushafThemeStyle, onSingleTap: () -> Un
                 .clip(RoundedCornerShape(16.dp))
                 .background(theme.pagePaper)
         ) {
-            // ترويسة الصفحة الزخرفية (اسم السورة يميناً والجزء يساراً)
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -811,7 +768,6 @@ private fun MushafPage(page: Int, theme: MushafThemeStyle, onSingleTap: () -> Un
                     .background(theme.frameInner.copy(alpha = 0.55f))
             )
 
-            // محتوى صفحة المصحف مع دعم التكبير بالنقر المزدوج أو السحب
             Box(
                 Modifier
                     .weight(1f)
@@ -902,7 +858,6 @@ private fun MushafPage(page: Int, theme: MushafThemeStyle, onSingleTap: () -> Un
                 }
             }
 
-            // تذييل الصفحة برقم الصفحة داخل زخرفة
             Box(
                 Modifier
                     .fillMaxWidth()
