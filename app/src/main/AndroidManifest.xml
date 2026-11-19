@@ -1,11 +1,4 @@
-ManifestMerger2$MergeFailureException: Error parsing /home/runner/work/QuranApp/QuranApp/app/src/main/AndroidManifest.xml
-```[span_0](start_span)[span_0](end_span)
-
-يحدث هذا غالباً بسبب وجود سطر فارغ أو مسافة قبل `<?xml version="1.0" encoding="utf-8"?>` في السطر الأول عند النسخ من الهاتف، أو وجود نص مكرر أسفل `</manifest>`.
-
-لحلها نهائياً، انسخ الكود النظيف التالي (بدون تعليقات عربية وبدون أي سطر فارغ في البداية) والصقه في **`app/src/main/AndroidManifest.xml`**:
-
-```xml
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
@@ -25,7 +18,7 @@ ManifestMerger2$MergeFailureException: Error parsing /home/runner/work/QuranApp/
     <application
         android:allowBackup="true"
         android:icon="@android:drawable/sym_def_app_icon"
-        android:label="القرآن الكريم"
+        android:label="QuranApp"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
@@ -68,3 +61,4 @@ ManifestMerger2$MergeFailureException: Error parsing /home/runner/work/QuranApp/
     </application>
 
 </manifest>
+
