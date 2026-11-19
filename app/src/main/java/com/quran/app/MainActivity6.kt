@@ -4,8 +4,10 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -160,94 +162,132 @@ fun DailyVerseCard(
         }
     }
 
+    val copyColor by animateColorAsState(
+        targetValue = if (isCopied) Color(0xFF34D399) else GoldShine,
+        label = "copyColor"
+    )
+
     Surface(
-        shape = RoundedCornerShape(18.dp),
-        border = BorderStroke(1.2.dp, GoldWarm.copy(alpha = 0.85f)),
-        shadowElevation = 4.dp,
+        shape = RoundedCornerShape(22.dp),
+        border = BorderStroke(1.5.dp, Brush.linearGradient(listOf(GoldShine, GoldWarm, GoldShine))),
+        shadowElevation = 6.dp,
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
     ) {
         Box(
             Modifier.background(
-                Brush.linearGradient(listOf(RoyalForest, EmeraldVibrant, TealStart))
+                Brush.radialGradient(
+                    colors = listOf(EmeraldVibrant, RoyalForest),
+                    radius = 900f
+                )
             )
         ) {
             IslamicPattern(Modifier.matchParentSize())
 
+            // إطار داخلي ذهبي رفيع يعطي طابع اللوحة القرآنية الفاخرة
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 13.dp, vertical = 10.dp),
+                    .padding(5.dp)
+                    .border(
+                        width = 0.7.dp,
+                        color = GoldShine.copy(alpha = 0.28f),
+                        shape = RoundedCornerShape(18.dp)
+                    )
+                    .padding(horizontal = 12.dp, vertical = 9.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // شريط علوي مضغوط: شارة آية اليوم + اسم السورة ورقم الآية
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = GoldShine.copy(alpha = 0.15f),
-                        border = BorderStroke(0.9.dp, GoldShine.copy(alpha = 0.65f))
-                    ) {
-                        Text(
-                            text = "✦ آيَةُ الْيَوْمِ ✦",
-                            fontFamily = UthmanicFontFamily,
-                            color = GoldShine,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 1.dp)
-                        )
-                    }
-
-                    Text(
-                        text = "سُورَةُ ${verse.surah} • آيَةٌ ${verse.ayahNumber}",
-                        fontFamily = UthmanicFontFamily,
-                        color = GoldSoftBg.copy(alpha = 0.92f),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Spacer(Modifier.height(7.dp))
-
-                // نص الآية الكريمة بحجم متناسق ومريح للعين
-                Text(
-                    text = verse.text,
-                    fontFamily = UthmanicFontFamily,
-                    color = Color.White,
-                    fontSize = 19.sp,
-                    fontWeight = FontWeight.Normal,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 32.sp,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                HorizontalDivider(
-                    thickness = 0.6.dp,
-                    color = GoldShine.copy(alpha = 0.22f)
-                )
-
-                Spacer(Modifier.height(7.dp))
-
-                // الشريط السفلي: أيقونات صغيرة (نسخ - مشاركة - عرض) + زر شرح متطور
+                // الشريط العلوي المدمج: شارة آية اليوم + معلومات السورة والآية
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(GoldShine.copy(alpha = 0.14f))
+                            .border(0.8.dp, GoldShine.copy(alpha = 0.55f), CircleShape)
+                            .padding(horizontal = 10.dp, vertical = 2.dp)
+                    ) {
+                        Box(
+                            Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(GoldShine)
+                        )
+                        Text(
+                            text = "آيَةُ الْيَوْمِ",
+                            fontFamily = UthmanicFontFamily,
+                            color = GoldShine,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.5.sp
+                        )
+                    }
+
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.Black.copy(alpha = 0.22f),
+                        border = BorderStroke(0.6.dp, GoldWarm.copy(alpha = 0.4f))
+                    ) {
+                        Text(
+                            text = "سُورَةُ ${verse.surah} • آيَةٌ ${verse.ayahNumber}",
+                            fontFamily = UthmanicFontFamily,
+                            color = GoldSoftBg,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(6.dp))
+
+                // فاصل زخرفي علوي خفيف
+                OrnamentalDivider()
+
+                Spacer(Modifier.height(4.dp))
+
+                // نص الآية الكريمة داخل خلفية مضيئة ناعمة ومضغوطة
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.Black.copy(alpha = 0.16f))
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = verse.text,
+                        fontFamily = UthmanicFontFamily,
+                        color = Color.White,
+                        fontSize = 18.5.sp,
+                        fontWeight = FontWeight.Normal,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 31.sp,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // الشريط السفلي: أيقونات صغيرة (نسخ • مشاركة • عرض) + زر شرح متطور
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         CompactVerseAction(
                             icon = if (isCopied) Icons.Default.Check else Icons.Default.ContentCopy,
                             label = if (isCopied) "نُسخت" else "نسخ",
-                            tint = if (isCopied) Color(0xFF4ADE80) else GoldShine
+                            tint = copyColor
                         ) {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             val copyText = "${verse.text}\n[سورة ${verse.surah}: ${verse.ayahNumber}]"
@@ -275,9 +315,9 @@ fun DailyVerseCard(
                     Surface(
                         onClick = { fx.click(); showExplanationSheet = true },
                         shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.55f)),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.65f)),
                         color = Color.Transparent,
-                        modifier = Modifier.shadow(4.dp, RoundedCornerShape(12.dp))
+                        modifier = Modifier.shadow(5.dp, RoundedCornerShape(12.dp))
                     ) {
                         Row(
                             modifier = Modifier
@@ -315,7 +355,7 @@ fun DailyVerseCard(
             onDismissRequest = { showExplanationSheet = false },
             containerColor = RoyalForest,
             contentColor = Color.White,
-            shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp)
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
         ) {
             Column(
                 modifier = Modifier
@@ -331,7 +371,7 @@ fun DailyVerseCard(
                         imageVector = Icons.Default.AutoAwesome,
                         contentDescription = null,
                         tint = GoldShine,
-                        modifier = Modifier.size(19.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                     Text(
                         text = "التفسير الميسّر وتأمل الآية",
@@ -345,7 +385,7 @@ fun DailyVerseCard(
 
                 Text(
                     text = "سورة ${verse.surah} • الآية ${verse.ayahNumber} • صفحة ${verse.page}",
-                    color = GoldSoftBg.copy(alpha = 0.75f),
+                    color = GoldSoftBg.copy(alpha = 0.8f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -354,8 +394,8 @@ fun DailyVerseCard(
 
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = Color.White.copy(alpha = 0.08f),
-                    border = BorderStroke(1.dp, GoldWarm.copy(alpha = 0.45f)),
+                    color = EmeraldVibrant.copy(alpha = 0.45f),
+                    border = BorderStroke(1.dp, GoldWarm.copy(alpha = 0.6f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
@@ -424,6 +464,41 @@ fun DailyVerseCard(
 }
 
 @Composable
+private fun OrnamentalDivider() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(0.7.dp)
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(Color.Transparent, GoldShine.copy(alpha = 0.55f))
+                    )
+                )
+        )
+        Text(
+            text = " ۞ ",
+            color = GoldShine.copy(alpha = 0.85f),
+            fontSize = 11.sp
+        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(0.7.dp)
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(GoldShine.copy(alpha = 0.55f), Color.Transparent)
+                    )
+                )
+        )
+    }
+}
+
+@Composable
 private fun CompactVerseAction(
     icon: ImageVector,
     label: String,
@@ -434,7 +509,8 @@ private fun CompactVerseAction(
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(Color.White.copy(alpha = 0.1f))
+            .background(Color.White.copy(alpha = 0.09f))
+            .border(0.6.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(10.dp))
             .clickable { fx.click(); onClick() }
             .padding(horizontal = 7.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -444,7 +520,7 @@ private fun CompactVerseAction(
             imageVector = icon,
             contentDescription = label,
             tint = tint,
-            modifier = Modifier.size(12.5.dp)
+            modifier = Modifier.size(12.dp)
         )
         Text(
             text = label,
