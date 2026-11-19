@@ -48,7 +48,6 @@ data class Reciter(val id: String, val name: String, val style: String, val url:
 data class HadithItem(val title: String, val text: String, val source: String)
 data class DhikrItem(val title: String, val text: String, val target: Int)
 data class TasbihStage(val phrase: String, val subtitle: String, val defaultTarget: Int)
-data class DailyVerse(val text: String, val ref: String, val page: Int)
 data class City(val name: String, val lat: Double, val lng: Double)
 data class HifzQuizItem(val question: String, val options: List<String>, val correctIndex: Int, val surahRef: String)
 
@@ -156,16 +155,6 @@ object QuranData {
         val num = n.toIntOrNull()
         return surahs.filter { it.name.normalizeAr().contains(n) || (num != null && it.num == num) }
     }
-
-    val dailyVerses = listOf(
-        DailyVerse("﴿ إِنَّ مَعَ الْعُسْرِ يُسْرًا ﴾", "سورة الشرح • آية 6", 596),
-        DailyVerse("﴿ أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ ﴾", "سورة الرعد • آية 28", 252),
-        DailyVerse("﴿ وَقُل رَّبِّ زِدْنِي عِلْمًا ﴾", "سورة طه • آية 114", 320),
-        DailyVerse("﴿ فَإِنِّي قَرِيبٌ أُجِيبُ دَعْوَةَ الدَّاعِ إِذَا دَعَانِ ﴾", "سورة البقرة • آية 186", 29),
-        DailyVerse("﴿ وَلَسَوْفَ يُعْطِيكَ رَبُّكَ فَتَرْضَىٰ ﴾", "سورة الضحى • آية 5", 596),
-        DailyVerse("﴿ وَمَن يَتَّقِ اللَّهَ يَجْعَل لَّهُ مَخْرَجًا ﴾", "سورة الطلاق • آية 2", 558),
-        DailyVerse("﴿ رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً ﴾", "سورة البقرة • آية 201", 31)
-    )
 
     val hadiths = listOf(
         HadithItem("الأعمال بالنيات", "«إِنَّمَا الأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى»", "متفق عليه"),
@@ -710,3 +699,4 @@ private fun requestIgnoreBatteryOptimization(ctx: Context) {
         }
     }
 }
+
