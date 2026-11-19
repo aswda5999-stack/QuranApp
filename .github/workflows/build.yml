@@ -56,8 +56,12 @@ jobs:
 
       - name: Build Release APK
         run: |
-          chmod +x ./gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew assembleRelease --no-daemon --stacktrace
+          else
+            gradle assembleRelease --no-daemon --stacktrace
+          fi
 
       - name: Align, Sign (V1+V2+V3) & Verify APK
         run: |
