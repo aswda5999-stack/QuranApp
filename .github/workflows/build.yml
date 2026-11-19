@@ -2,11 +2,8 @@ name: Build & Sign QuranApp APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
   build:
@@ -22,79 +19,41 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Auto-increment versionCode
-        run: |
-          BUILD_NUM=$((200 + GITHUB_RUN_NUMBER))
-          echo "Setting versionCode to $BUILD_NUM"
-          if [ -f "app/build.gradle.kts" ]; then
-            sed -i -E "s/versionCode\s*=\s*[0-9]+/versionCode = $BUILD_NUM/g" app/build.gradle.kts
-            sed -i -E "s/versionName\s*=\s*\"[^\"]+\"/versionName = \"2.$GITHUB_RUN_NUMBER\"/g" app/build.gradle.kts
-          elif [ -f "app/build.gradle" ]; then
-            sed -i -E "s/versionCode\s+[0-9]+/versionCode $BUILD_NUM/g" app/build.gradle
-            sed -i -E "s/versionName\s+\"[^\"]+\"/versionName \"2.$GITHUB_RUN_NUMBER\"/g" app/build.gradle
-          fi
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Ensure Permanent Keystore Exists
-        run: |
-          mkdir -p signing
-          if [ ! -f "signing/quran_release.jks" ]; then
-            keytool -genkeypair -v \
-              -keystore signing/quran_release.jks \
-              -alias quran_key \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -storepass QuranApp2026! \
-              -keypass QuranApp2026! \
-              -dname "CN=QuranApp, OU=Mobile, O=QuranApp, L=Mecca, C=SA"
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add -f signing/quran_release.jks
-            git commit -m "chore: save permanent release keystore [skip ci]" || true
-            git push || true
-          fi
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
       - name: Build Release APK
+        run: ./gradlew assembleRelease
+
+      - name: Decode Keystore
         run: |
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            ./gradlew assembleRelease --no-daemon --stacktrace
-          else
-            gradle assembleRelease --no-daemon --stacktrace
-          fi
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > release.keystore
 
-      - name: Align, Sign (V1+V2+V3) & Verify APK
+      - name: Zipalign and Sign APK
         run: |
-          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          BUILD_TOOLS_DIR=$(ls -d "$SDK_ROOT"/build-tools/* | sort -V | tail -n 1)
-          echo "Using build-tools: $BUILD_TOOLS_DIR"
+          BUILD_TOOLS_DIR=$(find $ANDROID_HOME/build-tools -maxdepth 1 -mindepth 1 | sort -V | tail -n 1)
+          UNSIGNED_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
 
-          RAW_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          echo "Found raw APK: $RAW_APK"
+          $BUILD_TOOLS_DIR/zipalign -v -p 4 "$UNSIGNED_APK" aligned.apk
 
-          "$BUILD_TOOLS_DIR/zipalign" -v -p -f 4 "$RAW_APK" aligned.apk
-
-          "$BUILD_TOOLS_DIR/apksigner" sign \
-            --ks signing/quran_release.jks \
-            --ks-key-alias quran_key \
-            --ks-pass pass:QuranApp2026! \
-            --key-pass pass:QuranApp2026! \
+          $BUILD_TOOLS_DIR/apksigner sign \
+            --ks release.keystore \
+            --ks-pass "pass:${{ secrets.KEYSTORE_PASSWORD }}" \
+            --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
+            --key-pass "pass:${{ secrets.KEY_PASSWORD }}" \
             --v1-signing-enabled true \
             --v2-signing-enabled true \
             --v3-signing-enabled true \
             --out QuranApp-Release.apk \
             aligned.apk
 
-          "$BUILD_TOOLS_DIR/apksigner" verify --verbose QuranApp-Release.apk
+          $BUILD_TOOLS_DIR/apksigner verify --verbose QuranApp-Release.apk
 
-      - name: Publish Signed APK to Releases
-        uses: softprops/action-gh-release@v2
+      - name: Upload Signed APK
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: latest-release
-          name: "QuranApp - أحدث نسخة موقعة (بناء #${{ github.run_number }})"
-          body: "نسخة موقعة رسمياً (V1+V2+V3) وجاهزة للتثبيت المباشر."
-          files: QuranApp-Release.apk
-          prerelease: false
-          make_latest: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: QuranApp-Release
+          path: QuranApp-Release.apk
