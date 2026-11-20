@@ -8,17 +8,15 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -29,9 +27,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Calendar
 
-// ============================================================
-// 1. نموذج بيانات آية اليوم ومستودع الآيات المختارة وتفسيرها
-// ============================================================
 data class DailyVerseItem(
     val arabicText: String,
     val surahName: String,
@@ -97,51 +92,11 @@ private val DailyVersesBank: List<DailyVerseItem> = listOf(
         ayahNum = 115,
         pageNum = 234,
         tafsir = "تثبيت للقلب على الطاعة والإحسان بأن كل عملٍ صالحٍ وصبرٍ جميل محفوظٌ عند الله ومُجازًى عليه بأوفى الثواب."
-    ),
-    DailyVerseItem(
-        arabicText = "﴿ اللَّهُ لَا إِلَٰهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ ۚ لَا تَأْخُذُهُ سِنَةٌ وَلَا نَوْمٌ ﴾",
-        surahName = "البقرة",
-        surahNum = 2,
-        ayahNum = 255,
-        pageNum = 42,
-        tafsir = "آية الكرسي، أعظم آية في كتاب الله؛ تجمع أسماء الله وصفاته وتفرّده بالألوهية، وهي حصنٌ للمؤمن صباحاً ومساءً وعند النوم."
-    ),
-    DailyVerseItem(
-        arabicText = "﴿ وَإِذَا سَأَلَكَ عِبَادِي عَنِّي فَإِنِّي قَرِيبٌ ۖ أُجِيبُ دَعْوَةَ الدَّاعِ إِذَا دَعَانِ ﴾",
-        surahName = "البقرة",
-        surahNum = 2,
-        ayahNum = 186,
-        pageNum = 28,
-        tafsir = "قربٌ من الله لعباده بالعلم والإجابة؛ فلا واسطة بين العبد وربه في الدعاء، فاسأله بيقين وأحسن الظن به."
-    ),
-    DailyVerseItem(
-        arabicText = "﴿ قُلْ يَا عِبَادِيَ الَّذِينَ أَسْرَفُوا عَلَىٰ أَنفُسِهِمْ لَا تَقْنَطُوا مِن رَّحْمَةِ اللَّهِ ۚ إِنَّ اللَّهَ يَغْفِرُ الذُّنُوبَ جَمِيعًا ﴾",
-        surahName = "الزمر",
-        surahNum = 39,
-        ayahNum = 53,
-        pageNum = 464,
-        tafsir = "باب الرجاء مفتوح لكل مذنب؛ فلا تيأس من رحمة الله، وبادر بالتوبة والاستغفار فإن الله يقبل التائبين."
-    ),
-    DailyVerseItem(
-        arabicText = "﴿ لَا يُكَلِّفُ اللَّهُ نَفْسًا إِلَّا وُسْعَهَا ﴾",
-        surahName = "البقرة",
-        surahNum = 2,
-        ayahNum = 286,
-        pageNum = 49,
-        tafsir = "من رحمة الله بعباده أنه لا يحمّل أحداً فوق طاقته، فكل تكليف في حدود القدرة والاستطاعة."
-    ),
-    DailyVerseItem(
-        arabicText = "﴿ وَلَا تَهِنُوا وَلَا تَحْزَنُوا وَأَنتُمُ الْأَعْلَوْنَ إِن كُنتُم مُّؤْمِنِينَ ﴾",
-        surahName = "آل عمران",
-        surahNum = 3,
-        ayahNum = 139,
-        pageNum = 67,
-        tafsir = "تسلية للمؤمنين وتثبيت لهم: لا تضعفوا ولا تحزنوا فالعاقبة والعزة لأهل الإيمان الصادق."
     )
 )
 
 // ============================================================
-// 2. بطاقة آية اليوم المستقلة المتطورة (DailyVerseCard)
+// بطاقة آية اليوم الاحترافية الثابتة بأزرار موحدة اللون والنمط
 // ============================================================
 @Composable
 fun DailyVerseCard(nav: Nav) {
@@ -149,107 +104,64 @@ fun DailyVerseCard(nav: Nav) {
     val fx = LocalFx.current
     val ctx = LocalContext.current
 
-    val dayIndex = remember {
-        Calendar.getInstance().get(Calendar.DAY_OF_YEAR) % DailyVersesBank.size
+    // تتغير تلقائياً حسب اليوم بدون أسهم تنقل أو زر إعادة
+    val verse = remember {
+        val idx = Calendar.getInstance().get(Calendar.DAY_OF_YEAR) % DailyVersesBank.size
+        DailyVersesBank[idx]
     }
-    var verseIndex by remember { mutableIntStateOf(dayIndex) }
     var showTafsirDialog by remember { mutableStateOf(false) }
-
-    val verse = DailyVersesBank[verseIndex]
     val fullShareCopyText = "${verse.arabicText}\n[سورة ${verse.surahName} - آية ${verse.ayahNum}]"
 
     Surface(
         shape = RoundedCornerShape(26.dp),
         color = RoyalForest,
-        border = BorderStroke(1.5.dp, GoldWarm.copy(alpha = 0.75f)),
+        border = BorderStroke(1.5.dp, GoldWarm.copy(alpha = 0.78f)),
         shadowElevation = 8.dp,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 14.dp)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(RoyalForest, EmeraldVibrant, Color(0xFF0E4D38))
-                    )
-                )
+                .background(Brush.verticalGradient(listOf(RoyalForest, EmeraldDeep, EmeraldVibrant)))
         ) {
-            IslamicPattern(Modifier.matchParentSize())
+            IslamicPattern(Modifier.matchParentSize(), tint = GoldShine.copy(alpha = 0.08f))
 
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 18.dp, vertical = 18.dp),
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // 1. صف الترويسة: عنوان "آية اليوم" الكبير بالخط العثماني العريض + زر تبديل الآية
+                // عنوان البطاقة الثابت: "آية اليوم"
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Brush.linearGradient(listOf(GoldShine, GoldWarm)))
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = RoyalForest,
-                                modifier = Modifier.size(21.dp)
-                            )
-                        }
-
-                        Spacer(Modifier.width(10.dp))
-
-                        // كلمة "آية اليوم" كبيرة وعريضة بالخط العثماني
-                        Text(
-                            text = "آيَةُ الْيَوْمِ",
-                            fontFamily = UthmanicFontFamily,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 26.sp,
-                            color = GoldShine
-                        )
-                    }
-
-                    // زر تجديد الآية بتصميم أنيق ومتوازن
-                    Surface(
-                        onClick = {
-                            fx.click()
-                            verseIndex = (verseIndex + 1) % DailyVersesBank.size
-                        },
-                        shape = CircleShape,
-                        color = Color.White.copy(alpha = 0.12f),
-                        border = BorderStroke(1.dp, GoldShine.copy(alpha = 0.4f)),
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "آية أخرى",
-                                tint = GoldSoftBg,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
+                    Icon(Icons.Rounded.AutoAwesome, null, tint = GoldShine, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "آيَةُ الْيَوْمِ",
+                        fontFamily = UthmanicFontFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 24.sp,
+                        color = GoldShine
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Icon(Icons.Rounded.AutoAwesome, null, tint = GoldShine, modifier = Modifier.size(20.dp))
                 }
 
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(10.dp))
 
-                // 2. صندوق الآية بالخط العثماني الذي أضفته (UthmanicFontFamily)
+                // صندوق نص الآية العثماني
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color.Black.copy(alpha = 0.22f))
-                        .border(1.dp, GoldShine.copy(alpha = 0.35f), RoundedCornerShape(20.dp))
-                        .padding(horizontal = 16.dp, vertical = 16.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Color.Black.copy(alpha = 0.24f))
+                        .border(1.dp, GoldShine.copy(alpha = 0.38f), RoundedCornerShape(18.dp))
+                        .padding(horizontal = 14.dp, vertical = 14.dp)
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -259,113 +171,74 @@ fun DailyVerseCard(nav: Nav) {
                             text = verse.arabicText,
                             fontFamily = UthmanicFontFamily,
                             fontWeight = FontWeight.Normal,
-                            fontSize = 24.sp,
-                            lineHeight = 40.sp,
+                            fontSize = 23.sp,
+                            lineHeight = 38.sp,
                             color = Color.White,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth()
                         )
 
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(8.dp))
 
-                        // شارة اسم السورة ورقم الآية
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = GoldShine.copy(alpha = 0.16f),
-                            border = BorderStroke(0.8.dp, GoldShine.copy(alpha = 0.45f))
-                        ) {
-                            Text(
-                                text = "سُورَةُ ${verse.surahName} • آيَةُ ${verse.ayahNum}",
-                                fontFamily = UthmanicFontFamily,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.5.sp,
-                                color = GoldShine,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                            )
-                        }
+                        Text(
+                            text = "سُورَةُ ${verse.surahName} • آيَةُ ${verse.ayahNum}",
+                            fontFamily = UthmanicFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = GoldShine
+                        )
                     }
                 }
 
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(12.dp))
 
-                // 3. شريط الأزرار المتوازن والمنظّم (نسخ، مشاركة، عرض في المصحف + زر الشرح)
+                // 4 أزرار سفلية موحدة اللون والنمط تماماً (نسخ - عرض - مشاركة - التفسير)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // مجموعة الأيقونات الثلاث المتساوية (نسخ - مشاركة - عرض)
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    UniformVerseButton(
+                        label = "نسخ",
+                        icon = Icons.Rounded.ContentCopy,
+                        modifier = Modifier.weight(1f)
                     ) {
-                        VerseActionCircleButton(
-                            icon = Icons.Default.ContentCopy,
-                            contentDesc = "نسخ الآية",
-                            onClick = {
-                                fx.click()
-                                val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                cm.setPrimaryClip(ClipData.newPlainText("آية اليوم", fullShareCopyText))
-                                Toast.makeText(ctx, "تم نسخ الآية بنجاح ✓", Toast.LENGTH_SHORT).show()
-                            }
-                        )
-
-                        VerseActionCircleButton(
-                            icon = Icons.Default.Share,
-                            contentDesc = "مشاركة الآية",
-                            onClick = {
-                                fx.click()
-                                shareText(ctx, fullShareCopyText)
-                            }
-                        )
-
-                        VerseActionCircleButton(
-                            icon = Icons.AutoMirrored.Filled.MenuBook,
-                            contentDesc = "عرض في المصحف",
-                            onClick = {
-                                fx.click()
-                                nav.openPage(verse.pageNum)
-                            }
-                        )
+                        fx.click()
+                        val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        cm.setPrimaryClip(ClipData.newPlainText("آية اليوم", fullShareCopyText))
+                        Toast.makeText(ctx, "تم نسخ الآية ✓", Toast.LENGTH_SHORT).show()
                     }
 
-                    // زر الشرح والتفسير البارز والمتوازن
-                    Surface(
-                        onClick = {
-                            fx.click()
-                            showTafsirDialog = true
-                        },
-                        shape = RoundedCornerShape(14.dp),
-                        color = GoldShine,
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.7f)),
-                        shadowElevation = 4.dp,
-                        modifier = Modifier.height(42.dp)
+                    UniformVerseButton(
+                        label = "عرض",
+                        icon = Icons.AutoMirrored.Rounded.MenuBook,
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Lightbulb,
-                                contentDescription = "الشرح والتدبر",
-                                tint = RoyalForest,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(
-                                text = "الشرح والتدبر",
-                                color = RoyalForest,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 13.sp
-                            )
-                        }
+                        fx.click()
+                        nav.openPage(verse.pageNum)
+                    }
+
+                    UniformVerseButton(
+                        label = "مشاركة",
+                        icon = Icons.Rounded.Share,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        fx.click()
+                        shareText(ctx, fullShareCopyText)
+                    }
+
+                    UniformVerseButton(
+                        label = "التفسير",
+                        icon = Icons.Rounded.Description,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        fx.click()
+                        showTafsirDialog = true
                     }
                 }
             }
         }
     }
 
-    // نافذة التفسير والشرح المختصر للآية
     if (showTafsirDialog) {
         AlertDialog(
             onDismissRequest = { showTafsirDialog = false },
@@ -373,10 +246,10 @@ fun DailyVerseCard(nav: Nav) {
             containerColor = p.card,
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Lightbulb, null, tint = GoldWarm, modifier = Modifier.size(22.dp))
+                    Icon(Icons.Rounded.Description, null, tint = GoldWarm, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "تدبر سورة ${verse.surahName} (${verse.ayahNum})",
+                        text = "تفسير سورة ${verse.surahName} (${verse.ayahNum})",
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 16.sp,
                         color = p.ink
@@ -417,7 +290,7 @@ fun DailyVerseCard(nav: Nav) {
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = EmeraldVibrant)
                 ) {
-                    Text("اقرأ في المصحف", fontWeight = FontWeight.ExtraBold, color = GoldShine)
+                    Text("عرض في المصحف", fontWeight = FontWeight.ExtraBold, color = GoldShine)
                 }
             },
             dismissButton = {
@@ -430,24 +303,38 @@ fun DailyVerseCard(nav: Nav) {
 }
 
 @Composable
-private fun VerseActionCircleButton(
+private fun UniformVerseButton(
+    label: String,
     icon: ImageVector,
-    contentDesc: String,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     Surface(
         onClick = onClick,
-        shape = CircleShape,
+        shape = RoundedCornerShape(14.dp),
         color = Color.White.copy(alpha = 0.14f),
         border = BorderStroke(1.1.dp, GoldShine.copy(alpha = 0.55f)),
-        modifier = Modifier.size(42.dp)
+        modifier = modifier.height(54.dp)
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(vertical = 6.dp, horizontal = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
             Icon(
                 imageVector = icon,
-                contentDescription = contentDesc,
+                contentDescription = label,
                 tint = GoldShine,
-                modifier = Modifier.size(19.dp)
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = label,
+                color = Color.White,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 11.sp
             )
         }
     }

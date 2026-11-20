@@ -3,25 +3,23 @@
 package com.quran.app
 
 import android.widget.Toast
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,13 +36,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
-// ============================================================
-// 1. نماذج صيغ التسبيح للمسبحة الإلكترونية
-// ============================================================
 data class TasbihPhrase(
     val title: String,
     val arabicText: String,
@@ -61,24 +57,20 @@ private val DefaultTasbihPhrases = listOf(
     TasbihPhrase("الصلاة على النبي ﷺ", "اللَّهُمَّ صَلِّ وَسَلِّمْ عَلَىٰ نَبِيِّنَا مُحَمَّدٍ", 100),
     TasbihPhrase("تسبيح مضاعف", "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ ، سُبْحَانَ اللَّهِ الْعَظِيمِ", 100),
     TasbihPhrase("التسبيح الجامع", "سُبْحَانَ اللَّهِ وَالْحَمْدُ لِلَّهِ وَلَا إِلَٰهَ إِلَّا اللَّهُ وَاللَّهُ أَكْبَرُ", 100),
-    TasbihPhrase("التوكل", "حَسْبُنَا اللَّهُ وَنِعْمَ الْوَكِيلُ", 100),
-    TasbihPhrase("دعوة ذي النون", "لَا إِلَٰهَ إِلَّا أَنْتَ سُبْحَانَكَ إِنِّي كُنتُ مِنَ الظَّالِمِينَ", 100),
-    TasbihPhrase("التوبة", "رَبِّ اغْفِرْ لِي وَتُبْ عَلَيَّ إِنَّكَ أَنْتَ التَّوَّابُ الرَّحِيمُ", 100)
+    TasbihPhrase("التوكل", "حَسْبُنَا اللَّهُ وَنِعْمَ الْوَكِيلُ", 100)
 )
 
 private val TargetOptions = listOf(10, 33, 99, 100, 1000, 0)
 
-/** حجم الخط يتناسب عكسياً مع طول الذكر ليبقى كبيراً وواضحاً دائماً */
-private fun phraseFontSize(len: Int): Float = when {
-    len <= 14 -> 52f
-    len <= 24 -> 44f
-    len <= 40 -> 36f
-    len <= 60 -> 30f
-    else -> 25f
+private fun compactPhraseFontSize(len: Int): Float = when {
+    len <= 16 -> 32f
+    len <= 28 -> 26f
+    len <= 45 -> 22f
+    else -> 19f
 }
 
 // ============================================================
-// 2. شاشة المسبحة الإلكترونية (TasbihScreen)
+// شاشة المسبحة الإلكترونية المضغوطة (شاشة واحدة بدون تمرير للسفل وللعلى)
 // ============================================================
 @Composable
 fun TasbihScreen(nav: Nav) {
@@ -91,10 +83,8 @@ fun TasbihScreen(nav: Nav) {
     val phrases = DefaultTasbihPhrases + st.customPhrases.toList()
     val phrasesNow by rememberUpdatedState(phrases)
     val index = st.tasbihIndex.coerceIn(0, phrases.lastIndex)
-
     val pagerState = rememberPagerState(initialPage = index, pageCount = { phrases.size })
 
-    // عند سحب بطاقة الذكر لصيغة أخرى: نغيّرها ونصفّر العدّاد ونضبط هدفها الافتراضي
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }.collect { page ->
             if (page != st.tasbihIndex) {
@@ -119,7 +109,7 @@ fun TasbihScreen(nav: Nav) {
     val target = st.tasbihTarget
     val progress by animateFloatAsState(
         targetValue = if (target > 0) (count.toFloat() / target).coerceIn(0f, 1f) else 0f,
-        animationSpec = tween(180),
+        animationSpec = tween(160),
         label = "tasbihProgress"
     )
 
@@ -130,7 +120,7 @@ fun TasbihScreen(nav: Nav) {
         if (target > 0 && next >= target) {
             st.tasbihCount = 0
             st.tasbihRounds += 1
-            if (st.stageVib) fx.vibrate(180L) else fx.vibrate(40L)
+            if (st.stageVib) fx.vibrate(170L) else fx.vibrate(40L)
         } else {
             st.tasbihCount = next
             fx.vibrate(22L)
@@ -144,169 +134,132 @@ fun TasbihScreen(nav: Nav) {
     ) {
         ScreenHeader(
             title = "المسبحة الإلكترونية",
-            subtitle = "اسحب البطاقة لتغيير الذكر • اضغط الدائرة للتسبيح",
             onBack = { nav.back() },
             trailing = {
                 IconButton(onClick = { fx.click(); st.tasbihFontScale -= 0.1f }) {
-                    Icon(Icons.Default.TextDecrease, "تصغير الخط", tint = GoldSoftBg)
+                    Icon(Icons.Rounded.TextDecrease, "تصغير الخط", tint = GoldSoftBg)
                 }
                 IconButton(onClick = { fx.click(); st.tasbihFontScale += 0.1f }) {
-                    Icon(Icons.Default.TextIncrease, "تكبير الخط", tint = GoldSoftBg)
+                    Icon(Icons.Rounded.TextIncrease, "تكبير الخط", tint = GoldSoftBg)
                 }
             }
         )
 
+        // محتوى موزع بمرونة ليتسع في شاشة واحدة تماماً بدون أي Scroll
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(vertical = 14.dp),
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // إحصائيات
+            // 1. شريط الإحصائيات المدمج
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                StatPillCard("إجمالي التسبيحات", "${st.totalTasbih}", Icons.Default.Spa, EmeraldVibrant, Modifier.weight(1f))
-                StatPillCard("الجولات المكتملة", "${st.tasbihRounds}", Icons.Default.Loop, GoldWarm, Modifier.weight(1f))
+                CompactStatChip("المجموع: ${st.totalTasbih}", Icons.Rounded.Spa, Modifier.weight(1f))
+                CompactStatChip("الجولات: ${st.tasbihRounds}", Icons.Rounded.Loop, Modifier.weight(1f))
             }
 
-            // بطاقة الذكر الكبيرة بالخط العثماني العريض (قابلة للسحب)
+            // 2. بطاقة الذكر المدمجة (قابلة للسحب يميناً ويساراً)
             HorizontalPager(
                 state = pagerState,
-                contentPadding = PaddingValues(horizontal = 18.dp),
-                pageSpacing = 12.dp,
-                modifier = Modifier.fillMaxWidth()
+                pageSpacing = 10.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(126.dp)
             ) { page ->
                 val ph = phrases[page.coerceIn(0, phrases.lastIndex)]
                 Surface(
-                    shape = RoundedCornerShape(28.dp),
+                    shape = RoundedCornerShape(22.dp),
                     color = RoyalForest,
-                    border = BorderStroke(1.6.dp, GoldWarm.copy(alpha = 0.8f)),
-                    shadowElevation = 8.dp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(250.dp)
+                    border = BorderStroke(1.4.dp, GoldWarm.copy(alpha = 0.8f)),
+                    shadowElevation = 5.dp,
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .background(Brush.verticalGradient(listOf(RoyalForest, EmeraldVibrant)))
-                    ) {
+                    Box(Modifier.background(Brush.horizontalGradient(listOf(RoyalForest, EmeraldVibrant)))) {
                         IslamicPattern(Modifier.matchParentSize())
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 18.dp, vertical = 14.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Surface(shape = RoundedCornerShape(12.dp), color = Color.White.copy(alpha = 0.14f)) {
-                                Text(
-                                    text = "${ph.title} • الهدف ${ph.defaultTarget}",
-                                    color = GoldSoftBg,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 12.sp,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
-                                )
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxWidth(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                val size = phraseFontSize(ph.arabicText.length) * st.tasbihFontScale
-                                Text(
-                                    text = ph.arabicText,
-                                    fontFamily = UthmanicFontFamily,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = size.sp,
-                                    lineHeight = (size * 1.65f).sp,
-                                    color = GoldShine,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.verticalScroll(rememberScrollState())
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // مؤشر الصفحات
-            Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                phrases.indices.forEach { i ->
-                    val sel = i == pagerState.currentPage
-                    Box(
-                        Modifier
-                            .height(6.dp)
-                            .width(if (sel) 18.dp else 6.dp)
-                            .clip(CircleShape)
-                            .background(if (sel) EmeraldVibrant else p.border)
-                    )
-                }
-            }
-
-            // أسماء الأذكار للانتقال السريع
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                itemsIndexed(phrases) { i, ph ->
-                    val sel = i == pagerState.currentPage
-                    Surface(
-                        onClick = { fx.click(); scope.launch { pagerState.animateScrollToPage(i) } },
-                        shape = RoundedCornerShape(14.dp),
-                        color = if (sel) EmeraldVibrant else p.card,
-                        border = BorderStroke(1.dp, if (sel) GoldShine else p.border)
-                    ) {
-                        Text(
-                            text = ph.title,
-                            color = if (sel) Color.White else p.ink,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 12.5.sp,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
-                        )
-                    }
-                }
-            }
-
-            // اختيار العدد المستهدف
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text("العدد المستهدف", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, color = p.muted)
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    itemsIndexed(TargetOptions) { _, t ->
-                        val sel = target == t
-                        Surface(
-                            onClick = { fx.click(); st.tasbihTarget = t; st.tasbihCount = 0 },
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (sel) GoldWarm else p.card,
-                            border = BorderStroke(1.dp, if (sel) GoldShine else p.border)
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
                         ) {
                             Text(
-                                text = if (t == 0) "مفتوح ∞" else "$t",
-                                color = if (sel) RoyalForest else p.ink,
+                                text = ph.title,
+                                color = GoldSoftBg,
                                 fontWeight = FontWeight.ExtraBold,
-                                fontSize = 13.sp,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                                fontSize = 11.sp
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            val sz = compactPhraseFontSize(ph.arabicText.length) * st.tasbihFontScale
+                            Text(
+                                text = ph.arabicText,
+                                fontFamily = UthmanicFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = sz.sp,
+                                lineHeight = (sz * 1.45f).sp,
+                                color = GoldShine,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
                 }
             }
 
-            // العداد الدائري
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(250.dp)) {
+            // 3. شريط اختيار صيغة الذكر (تمييز ذهبي واضح للمختار)
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                itemsIndexed(phrases) { i, ph ->
+                    val sel = i == pagerState.currentPage
+                    val bg by animateColorAsState(if (sel) GoldShine else p.card, label = "phBg")
+                    Surface(
+                        onClick = { fx.click(); scope.launch { pagerState.animateScrollToPage(i) } },
+                        shape = RoundedCornerShape(12.dp),
+                        color = bg,
+                        border = BorderStroke(1.2.dp, if (sel) RoyalForest else p.border)
+                    ) {
+                        Text(
+                            text = ph.title,
+                            color = if (sel) RoyalForest else p.ink,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 11.5.sp,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            }
+
+            // 4. شريط اختيار الهدف (تمييز ذهبي واضح للمختار)
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                itemsIndexed(TargetOptions) { _, t ->
+                    val sel = target == t
+                    val bg by animateColorAsState(if (sel) GoldShine else p.card, label = "tgBg")
+                    Surface(
+                        onClick = { fx.click(); st.tasbihTarget = t; st.tasbihCount = 0 },
+                        shape = RoundedCornerShape(10.dp),
+                        color = bg,
+                        border = BorderStroke(1.2.dp, if (sel) RoyalForest else p.border)
+                    ) {
+                        Text(
+                            text = if (t == 0) "مفتوح ∞" else "هدف $t",
+                            color = if (sel) RoyalForest else p.ink,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 11.5.sp,
+                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp)
+                        )
+                    }
+                }
+            }
+
+            // 5. حلقة التسبيح التفاعلية المركزية
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(196.dp)) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
-                    val stroke = 16.dp.toPx()
+                    val stroke = 13.dp.toPx()
                     val inset = stroke / 2f
                     val arcSize = Size(size.width - stroke, size.height - stroke)
                     drawArc(
@@ -333,47 +286,44 @@ fun TasbihScreen(nav: Nav) {
                     shape = CircleShape,
                     color = RoyalForest,
                     border = BorderStroke(2.dp, GoldWarm),
-                    shadowElevation = 8.dp,
-                    modifier = Modifier.size(196.dp)
+                    shadowElevation = 6.dp,
+                    modifier = Modifier.size(156.dp)
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Text("$count", color = GoldShine, fontWeight = FontWeight.ExtraBold, fontSize = 64.sp)
+                        Text("$count", color = GoldShine, fontWeight = FontWeight.ExtraBold, fontSize = 48.sp)
                         Text(
-                            text = if (target > 0) "من $target" else "بدون حد",
+                            text = if (target > 0) "من $target" else "مفتوح",
                             color = GoldSoftBg,
                             fontWeight = FontWeight.ExtraBold,
-                            fontSize = 14.sp
+                            fontSize = 12.sp
                         )
-                        Spacer(Modifier.height(4.dp))
-                        Text("اضغط للتسبيح", color = Color.White.copy(alpha = 0.7f), fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        Text("اضغط للتسبيح", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp)
                     }
                 }
             }
 
-            // أزرار التحكم
+            // 6. أزرار التحكم السفلية المدمجة
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                ControlButton("تراجع", Icons.Default.Undo, Modifier.weight(1f)) {
+                CompactControlBtn("تراجع", Icons.Rounded.Undo, Modifier.weight(1f)) {
                     fx.click()
                     if (st.tasbihCount > 0) st.tasbihCount -= 1
                 }
-                ControlButton("تصفير", Icons.Default.Refresh, Modifier.weight(1f)) {
+                CompactControlBtn("تصفير", Icons.Rounded.Refresh, Modifier.weight(1f)) {
                     fx.click()
                     st.tasbihCount = 0
                 }
-                ControlButton("ذكر جديد", Icons.Default.Add, Modifier.weight(1f)) {
+                CompactControlBtn("ذكر جديد", Icons.Rounded.Add, Modifier.weight(1f)) {
                     fx.click()
                     showAddDialog = true
                 }
                 if (pagerState.currentPage >= DefaultTasbihPhrases.size) {
-                    ControlButton("حذف", Icons.Default.Delete, Modifier.weight(1f), danger = true) {
+                    CompactControlBtn("حذف", Icons.Rounded.Delete, Modifier.weight(1f), danger = true) {
                         fx.click()
                         val page = pagerState.currentPage
                         st.removeCustomPhrase(page - DefaultTasbihPhrases.size)
@@ -384,8 +334,6 @@ fun TasbihScreen(nav: Nav) {
                     }
                 }
             }
-
-            Spacer(Modifier.height(8.dp))
         }
     }
 
@@ -439,39 +387,28 @@ fun TasbihScreen(nav: Nav) {
 }
 
 @Composable
-private fun StatPillCard(label: String, value: String, icon: ImageVector, accent: Color, modifier: Modifier = Modifier) {
+private fun CompactStatChip(text: String, icon: ImageVector, modifier: Modifier = Modifier) {
     val p = LocalPalette.current
     Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(14.dp),
         color = p.card,
         border = BorderStroke(1.dp, p.border),
-        shadowElevation = 2.dp,
         modifier = modifier
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
         ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(11.dp))
-                    .background(accent.copy(alpha = 0.14f))
-            ) {
-                Icon(icon, null, tint = accent, modifier = Modifier.size(20.dp))
-            }
-            Spacer(Modifier.width(10.dp))
-            Column {
-                Text(value, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = p.ink)
-                Text(label, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, color = p.muted)
-            }
+            Icon(icon, null, tint = GoldWarm, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(text, fontWeight = FontWeight.ExtraBold, fontSize = 12.5.sp, color = p.ink)
         }
     }
 }
 
 @Composable
-private fun ControlButton(
+private fun CompactControlBtn(
     label: String,
     icon: ImageVector,
     modifier: Modifier = Modifier,
@@ -481,21 +418,21 @@ private fun ControlButton(
     val p = LocalPalette.current
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         color = p.card,
         border = BorderStroke(1.dp, if (danger) DangerRed.copy(alpha = 0.6f) else p.border),
-        shadowElevation = 2.dp,
         modifier = modifier
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(vertical = 8.dp, horizontal = 4.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, null, tint = if (danger) DangerRed else EmeraldVibrant, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.height(3.dp))
-            Text(label, fontWeight = FontWeight.ExtraBold, fontSize = 11.5.sp, color = p.ink)
+            Icon(icon, null, tint = if (danger) DangerRed else EmeraldVibrant, modifier = Modifier.size(17.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(label, fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, color = p.ink, maxLines = 1)
         }
     }
 }

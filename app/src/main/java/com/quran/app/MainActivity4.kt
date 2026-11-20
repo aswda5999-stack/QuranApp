@@ -13,9 +13,10 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.widget.Toast
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -24,19 +25,20 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -54,6 +56,8 @@ import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import kotlin.math.PI
+import kotlin.math.sin
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -61,7 +65,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 // ============================================================
-// 1. محرك الصوت والتنزيل المرن لجميع الشبكات (QuranAudioEngine & AudioCache)
+// 1. محرك الصوت والتنزيل (QuranAudioEngine & AudioCache)
 // ============================================================
 data class PlayerState(
     val reciterId: String = "afs",
@@ -363,7 +367,7 @@ object QuranAudioEngine {
                         instanceFollowRedirects = false
                         connectTimeout = 25_000
                         readTimeout = 40_000
-                        setRequestProperty("User-Agent", "Dalvik/2.1.0 (Linux; U; Android)")
+                        setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36")
                         setRequestProperty("Accept", "*/*")
                         setRequestProperty("Connection", "keep-alive")
                         if (existingBytes > 0) setRequestProperty("Range", "bytes=$existingBytes-")
@@ -553,7 +557,7 @@ class PlayerService : Service() {
 }
 
 // ============================================================
-// 2. شاشة المكتبة الصوتية والمشغل السفلي المطور (AudioScreen)
+// 2. شاشة المكتبة الصوتية والمشغل العصري الجديد كلياً (AudioScreen)
 // ============================================================
 private fun fmtMs(ms: Int): String {
     val s = (ms / 1000).coerceAtLeast(0)
@@ -568,32 +572,19 @@ fun AudioScreen(nav: Nav) {
     val ctx = LocalContext.current
     val ps by PlayerService.state.collectAsState()
 
-    val listState = rememberLazyListState()
     var query by remember { mutableStateOf("") }
     var filterTab by remember { mutableIntStateOf(0) }
     var showSleep by remember { mutableStateOf(false) }
     var showRecitersDialog by remember { mutableStateOf(false) }
     var drag by remember { mutableStateOf<Float?>(null) }
-    var manualExpanded by remember { mutableStateOf<Boolean?>(null) }
 
-    val isScrollingDown by remember {
-        derivedStateOf {
-            listState.firstVisibleItemIndex > 1 || (listState.firstVisibleItemIndex == 1 && listState.firstVisibleItemScrollOffset > 80)
-        }
-    }
-
-    LaunchedEffect(isScrollingDown) {
-        if (!isScrollingDown) manualExpanded = null
-    }
-
-    val isPlayerExpanded = manualExpanded ?: !isScrollingDown
-
-    val infiniteTransition = rememberInfiniteTransition(label = "disc")
-    val discAngle by infiniteTransition.animateFloat(
+    // حركة الموجات الصوتية الحية للمشغل الجديد
+    val waveTransition = rememberInfiniteTransition(label = "wave")
+    val wavePhase by waveTransition.animateFloat(
         initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(animation = tween(14000, easing = LinearEasing)),
-        label = "discSpin"
+        targetValue = (2f * PI).toFloat(),
+        animationSpec = infiniteRepeatable(animation = tween(1600, easing = LinearEasing)),
+        label = "wavePhase"
     )
 
     LaunchedEffect(ps.error) {
@@ -618,482 +609,404 @@ fun AudioScreen(nav: Nav) {
         }
     }
 
-    Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize()) {
-            ScreenHeader("المكتبة الصوتية (${QuranData.reciters.size} قارئاً)", onBack = { nav.back() })
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(p.bg)
+    ) {
+        ScreenHeader(
+            title = "المكتبة الصوتية",
+            subtitle = "${QuranData.reciters.size} قارئاً • استماع وتنزيل",
+            onBack = { nav.back() },
+            trailing = {
+                IconButton(onClick = { fx.click(); showRecitersDialog = true }) {
+                    Icon(Icons.Rounded.Groups, "كل القراء", tint = GoldShine)
+                }
+            }
+        )
 
-            // شريط اختيار القارئ
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    onClick = { fx.click(); showRecitersDialog = true },
-                    shape = RoundedCornerShape(16.dp),
-                    color = GoldWarm,
-                    shadowElevation = 3.dp
+        // ============================================================
+        // 1. بطاقة المشغل الصوتي العصري الجديد (Modern Studio Wave Card)
+        // ============================================================
+        Surface(
+            shape = RoundedCornerShape(26.dp),
+            color = RoyalForest,
+            border = BorderStroke(1.5.dp, GoldWarm.copy(alpha = 0.8f)),
+            shadowElevation = 10.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+        ) {
+            Box(Modifier.background(Brush.linearGradient(listOf(RoyalForest, EmeraldDeep, EmeraldVibrant)))) {
+                IslamicPattern(Modifier.matchParentSize(), tint = GoldShine.copy(alpha = 0.07f))
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Groups, null, tint = RoyalForest, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("كل القراء", color = RoyalForest, fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
-                    }
-                }
-
-                Spacer(Modifier.width(8.dp))
-
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
-                    items(QuranData.reciters, key = { it.id }) { r ->
-                        val isSelected = r.id == st.reciterId
-                        Surface(
-                            onClick = {
-                                fx.click()
-                                st.reciterId = r.id
-                                if (ps.surah > 0 && ps.isPlaying) PlayerService.play(ctx, r.id, ps.surah)
-                            },
-                            shape = RoundedCornerShape(16.dp),
-                            color = if (isSelected) EmeraldVibrant else p.card,
-                            border = BorderStroke(1.2.dp, if (isSelected) GoldShine else p.border)
-                        ) {
-                            Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.RecordVoiceOver, null, tint = if (isSelected) GoldShine else TurquoiseAccent, modifier = Modifier.size(15.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(r.name, color = if (isSelected) Color.White else p.ink, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
-                            }
-                        }
-                    }
-                }
-            }
-
-            // مربع البحث عن السورة
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                singleLine = true,
-                placeholder = { Text("ابحث باسم السورة أو رقمها...", fontWeight = FontWeight.Bold, fontSize = 12.sp) },
-                leadingIcon = { Icon(Icons.Default.Search, null, tint = EmeraldVibrant) },
-                trailingIcon = {
-                    if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Default.Close, "مسح") }
-                },
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 2.dp)
-            )
-
-            // تصنيفات السور
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                val tabs = listOf("الكل (114)", "المحملة (بدون نت)", "مكية", "مدنية")
-                items(tabs.size) { idx ->
-                    FilterChip(
-                        selected = filterTab == idx,
-                        onClick = { fx.click(); filterTab = idx },
-                        label = { Text(tabs[idx], fontWeight = FontWeight.ExtraBold, fontSize = 11.sp) },
-                        shape = RoundedCornerShape(14.dp),
-                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = GoldWarm, selectedLabelColor = RoyalForest)
-                    )
-                }
-            }
-
-            // قائمة السور (زر تنزيل + نسبة مئوية دائرية + تحوّل لزر تشغيل فقط بعد الاكتمال بدون زر حذف)
-            LazyColumn(
-                state = listState,
-                contentPadding = PaddingValues(
-                    start = 14.dp,
-                    end = 14.dp,
-                    top = 4.dp,
-                    bottom = if (isPlayerExpanded) 245.dp else 92.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-            ) {
-                if (filteredSurahs.isEmpty()) {
-                    item { EmptyState(Icons.Default.MusicOff, "لا توجد سور مطابقة في هذا القسم") }
-                }
-                items(filteredSurahs, key = { it.num }) { s ->
-                    val cached = remember(ps.cacheVersion, st.reciterId, s.num) { AudioCache.has(ctx, st.reciterId, s.num) }
-                    val progress = ps.downloads["${st.reciterId}_${s.num}"]
-                    val isCurrent = ps.surah == s.num && ps.reciterId == st.reciterId
-                    val pctInt = ((progress ?: 0f) * 100).toInt().coerceIn(1, 99)
-
-                    QCard(
-                        shape = RoundedCornerShape(18.dp),
-                        color = if (isCurrent) EmeraldVibrant.copy(alpha = 0.14f) else null,
-                        borderColor = if (isCurrent) GoldWarm else if (cached) TurquoiseAccent.copy(alpha = 0.55f) else null,
-                        onClick = {
-                            if (isCurrent) PlayerService.toggle(ctx)
-                            else PlayerService.play(ctx, st.reciterId, s.num)
-                        }
+                    // الصف العلوي: اسم السورة + القارئ + موجة صوتية متحركة + زر المصحف
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        // شريط الموجات الصوتية الذهبي المتحرك
+                        Canvas(
+                            modifier = Modifier
+                                .width(44.dp)
+                                .height(34.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color.Black.copy(alpha = 0.25f))
+                                .padding(horizontal = 5.dp, vertical = 6.dp)
                         ) {
-                            NumberBadge(s.num, 36)
-                            Spacer(Modifier.width(10.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    text = "سُورَةُ ${s.name}",
-                                    fontFamily = UthmanicFontFamily,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 18.sp,
-                                    color = if (isCurrent) TurquoiseAccent else p.ink
-                                )
-                                Text(
-                                    text = when {
-                                        progress != null -> "جارٍ التنزيل ($pctInt%)..."
-                                        cached -> "محملة • جاهزة للتشغيل بدون إنترنت ✓"
-                                        else -> "${s.type} • ${s.ayahs} آية"
-                                    },
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = when {
-                                        progress != null -> GoldWarm
-                                        cached -> TurquoiseAccent
-                                        else -> p.muted
-                                    }
+                            val bars = 6
+                            val barWidth = size.width / (bars * 1.7f)
+                            val gap = (size.width - bars * barWidth) / (bars + 1)
+                            for (i in 0 until bars) {
+                                val factor = if (ps.isPlaying) {
+                                    0.3f + 0.7f * ((sin(wavePhase + i * 0.9f) + 1f) / 2f)
+                                } else {
+                                    0.22f + (i % 3) * 0.12f
+                                }
+                                val barH = size.height * factor
+                                val x = gap + i * (barWidth + gap)
+                                val y = (size.height - barH) / 2f
+                                drawRoundRect(
+                                    color = if (ps.isPlaying) GoldShine else GoldWarm.copy(alpha = 0.6f),
+                                    topLeft = Offset(x, y),
+                                    size = Size(barWidth, barH),
+                                    cornerRadius = CornerRadius(4f, 4f)
                                 )
                             }
+                        }
 
-                            // حالة التحميل / التشغيل:
-                            // 1. أثناء التنزيل: حلقة تقدم دائرية مع النسبة المئوية بالمنتصف
-                            // 2. بعد التنزيل: زر تشغيل بارز فقط (بدون زر حذف نهائياً)
-                            // 3. قبل التنزيل: زر تنزيل + زر تشغيل مباشر
-                            when {
-                                progress != null -> {
-                                    Box(
-                                        contentAlignment = Alignment.Center,
-                                        modifier = Modifier
-                                            .size(44.dp)
-                                            .clip(CircleShape)
-                                            .background(RoyalForest.copy(alpha = 0.1f))
-                                    ) {
-                                        CircularProgressIndicator(
-                                            progress = { progress },
-                                            modifier = Modifier.size(38.dp),
-                                            color = GoldWarm,
-                                            trackColor = EmeraldVibrant.copy(alpha = 0.25f),
-                                            strokeWidth = 3.2.dp
-                                        )
-                                        Text(
-                                            text = "$pctInt%",
-                                            fontSize = 9.5.sp,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            color = p.ink
+                        Spacer(Modifier.width(10.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = playingSurah?.let { "سُورَةُ ${it.name}" } ?: "سُورَةُ الْفَاتِحَةِ",
+                                fontFamily = UthmanicFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp,
+                                color = GoldShine,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = if (playingSurah != null) playingReciter.name else selectedReciter.name,
+                                color = GoldSoftBg,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.5.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        if (playingSurah != null) {
+                            IconButton(
+                                onClick = { fx.click(); nav.openPage(playingSurah.page) },
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(GoldShine.copy(alpha = 0.16f))
+                            ) {
+                                Icon(Icons.AutoMirrored.Rounded.MenuBook, "افتح في المصحف", tint = GoldShine, modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    }
+
+                    // شريط التقدم + الوقت
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                        Column(Modifier.fillMaxWidth()) {
+                            val frac = drag ?: if (ps.durationMs > 0) ps.positionMs / ps.durationMs.toFloat() else 0f
+                            Slider(
+                                value = frac.coerceIn(0f, 1f),
+                                onValueChange = { drag = it },
+                                onValueChangeFinished = {
+                                    drag?.let { PlayerService.seek(ctx, (it * ps.durationMs).toInt()) }
+                                    drag = null
+                                },
+                                enabled = ps.surah > 0 && ps.durationMs > 0 && !ps.isLoading,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = GoldShine,
+                                    activeTrackColor = GoldShine,
+                                    inactiveTrackColor = Color.White.copy(alpha = 0.22f)
+                                ),
+                                modifier = Modifier.height(22.dp)
+                            )
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(fmtMs(if (drag != null) (drag!! * ps.durationMs).toInt() else ps.positionMs), color = GoldSoftBg, fontSize = 10.sp)
+                                Text(if (ps.isLoading) "جارٍ التحميل..." else fmtMs(ps.durationMs), color = GoldShine, fontSize = 10.sp)
+                            }
+
+                            // أزرار التحكم الحديثة
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                IconButton(onClick = { fx.click(); PlayerService.prev(ctx) }, enabled = ps.surah > 1, modifier = Modifier.size(34.dp)) {
+                                    Icon(Icons.Rounded.SkipPrevious, "السابقة", tint = Color.White, modifier = Modifier.size(24.dp))
+                                }
+                                IconButton(onClick = { fx.click(); PlayerService.seekBy(ctx, -10_000) }, enabled = ps.surah > 0, modifier = Modifier.size(34.dp)) {
+                                    Icon(Icons.Rounded.Replay10, "رجوع 10ث", tint = GoldSoftBg, modifier = Modifier.size(22.dp))
+                                }
+                                Surface(
+                                    onClick = {
+                                        fx.click()
+                                        if (ps.surah == 0) PlayerService.play(ctx, st.reciterId, 1)
+                                        else PlayerService.toggle(ctx)
+                                    },
+                                    shape = RoundedCornerShape(18.dp),
+                                    color = GoldShine,
+                                    border = BorderStroke(1.5.dp, Color.White),
+                                    shadowElevation = 6.dp,
+                                    modifier = Modifier.size(width = 64.dp, height = 44.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        if (ps.isLoading) CircularProgressIndicator(Modifier.size(20.dp), color = RoyalForest, strokeWidth = 2.5.dp)
+                                        else Icon(
+                                            if (ps.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                            "تشغيل",
+                                            tint = RoyalForest,
+                                            modifier = Modifier.size(28.dp)
                                         )
                                     }
                                 }
-
-                                cached -> {
-                                    // بعد اكتمال التنزيل يظهر زر التشغيل فقط بتصميم مميز
-                                    Surface(
-                                        onClick = {
-                                            fx.click()
-                                            if (isCurrent) PlayerService.toggle(ctx)
-                                            else PlayerService.play(ctx, st.reciterId, s.num)
-                                        },
-                                        shape = RoundedCornerShape(14.dp),
-                                        color = if (isCurrent && ps.isPlaying) GoldWarm else EmeraldVibrant,
-                                        border = BorderStroke(1.dp, GoldShine.copy(alpha = 0.7f)),
-                                        shadowElevation = 3.dp
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = if (isCurrent && ps.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                                contentDescription = "تشغيل",
-                                                tint = if (isCurrent && ps.isPlaying) RoyalForest else GoldShine,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                            Text(
-                                                text = if (isCurrent && ps.isPlaying) "إيقاف" else "تشغيل",
-                                                color = if (isCurrent && ps.isPlaying) RoyalForest else Color.White,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                fontSize = 11.5.sp
-                                            )
-                                        }
-                                    }
+                                IconButton(onClick = { fx.click(); PlayerService.seekBy(ctx, 10_000) }, enabled = ps.surah > 0, modifier = Modifier.size(34.dp)) {
+                                    Icon(Icons.Rounded.Forward10, "تقديم 10ث", tint = GoldSoftBg, modifier = Modifier.size(22.dp))
                                 }
-
-                                else -> {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        IconButton(
-                                            onClick = { fx.click(); PlayerService.download(ctx, st.reciterId, s.num) },
-                                            modifier = Modifier
-                                                .size(38.dp)
-                                                .clip(CircleShape)
-                                                .background(GoldWarm.copy(alpha = 0.14f))
-                                        ) {
-                                            Icon(
-                                                Icons.Default.DownloadForOffline,
-                                                "تنزيل",
-                                                tint = GoldWarm,
-                                                modifier = Modifier.size(22.dp)
-                                            )
-                                        }
-
-                                        IconButton(
-                                            onClick = {
-                                                fx.click()
-                                                if (isCurrent) PlayerService.toggle(ctx)
-                                                else PlayerService.play(ctx, st.reciterId, s.num)
-                                            },
-                                            modifier = Modifier.size(40.dp)
-                                        ) {
-                                            Icon(
-                                                if (isCurrent && ps.isPlaying) Icons.Default.PauseCircleFilled else Icons.Default.PlayCircleFilled,
-                                                "تشغيل",
-                                                tint = if (isCurrent) GoldWarm else EmeraldVibrant,
-                                                modifier = Modifier.size(34.dp)
-                                            )
-                                        }
-                                    }
+                                IconButton(onClick = { fx.click(); PlayerService.next(ctx) }, enabled = ps.surah in 1..113, modifier = Modifier.size(34.dp)) {
+                                    Icon(Icons.Rounded.SkipNext, "التالية", tint = Color.White, modifier = Modifier.size(24.dp))
                                 }
                             }
                         }
+                    }
+
+                    // شريط أدوات الصوت السريعة (السرعة، التكرار، المتتالية، مؤقت النوم)
+                    val repeatLabel = when (ps.repeatMode) {
+                        1 -> "تحفيظ (${ps.repeatCount + 1}/3)"
+                        2 -> "تكرار ∞"
+                        else -> "تكرار"
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        ModernAudioChip("${ps.speed}x", Icons.Rounded.Speed, ps.speed != 1.0f) { PlayerService.cycleSpeed(ctx) }
+                        ModernAudioChip(repeatLabel, Icons.Rounded.RepeatOne, ps.repeatMode > 0) { PlayerService.cycleRepeat(ctx) }
+                        ModernAudioChip("متتالية", Icons.Rounded.PlaylistPlay, ps.autoNext) { PlayerService.toggleAutoNext(ctx) }
+                        ModernAudioChip(if (ps.sleepLeft > 0) "${ps.sleepLeft} د" else "نوم", Icons.Rounded.Bedtime, ps.sleepLeft > 0) { showSleep = true }
                     }
                 }
             }
         }
 
         // ============================================================
-        // المشغل السفلي الملكي المتحرك (Mini & Expanded Player)
+        // 2. شريط القراء مع تمييز لوني واضح للمختار
         // ============================================================
-        Surface(
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-            border = BorderStroke(1.6.dp, GoldWarm),
-            shadowElevation = 14.dp,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .animateContentSize(animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow))
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Box(Modifier.background(Brush.verticalGradient(listOf(RoyalForest, EmeraldVibrant)))) {
-                IslamicPattern(Modifier.matchParentSize())
-
-                if (!isPlayerExpanded) {
-                    Column(Modifier.fillMaxWidth().clickable { fx.click(); manualExpanded = true }) {
-                        LinearProgressIndicator(
-                            progress = { if (ps.durationMs > 0) (ps.positionMs / ps.durationMs.toFloat()).coerceIn(0f, 1f) else 0f },
-                            color = GoldShine,
-                            trackColor = Color.White.copy(alpha = 0.2f),
-                            modifier = Modifier.fillMaxWidth().height(3.dp)
+            items(QuranData.reciters, key = { it.id }) { r ->
+                val isSelected = r.id == st.reciterId
+                val bg by animateColorAsState(if (isSelected) GoldShine else p.card, label = "recBg")
+                Surface(
+                    onClick = {
+                        fx.click()
+                        st.reciterId = r.id
+                        if (ps.surah > 0 && ps.isPlaying) PlayerService.play(ctx, r.id, ps.surah)
+                    },
+                    shape = RoundedCornerShape(14.dp),
+                    color = bg,
+                    border = BorderStroke(1.3.dp, if (isSelected) RoyalForest else p.border),
+                    shadowElevation = if (isSelected) 4.dp else 1.dp
+                ) {
+                    Row(Modifier.padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Rounded.RecordVoiceOver,
+                            null,
+                            tint = if (isSelected) RoyalForest else EmeraldVibrant,
+                            modifier = Modifier.size(15.dp)
                         )
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(42.dp)
-                                    .rotate(if (ps.isPlaying) discAngle else 0f)
-                                    .clip(CircleShape)
-                                    .background(Brush.radialGradient(listOf(GoldShine, GoldWarm)))
-                                    .border(1.5.dp, Color.White, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.Default.GraphicEq, null, tint = RoyalForest, modifier = Modifier.size(20.dp))
-                            }
-
-                            Spacer(Modifier.width(10.dp))
-
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    playingSurah?.let { "سورة ${it.name}" } ?: "اختر سورة للتلاوة",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 14.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    if (playingSurah != null) playingReciter.name else selectedReciter.name,
-                                    color = GoldShine,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp,
-                                    maxLines = 1
-                                )
-                            }
-
-                            IconButton(onClick = { fx.click(); manualExpanded = true }, modifier = Modifier.size(34.dp)) {
-                                Icon(Icons.Default.KeyboardArrowUp, "توسيع المشغل", tint = GoldSoftBg)
-                            }
-
-                            Surface(
-                                onClick = {
-                                    fx.click()
-                                    if (ps.surah == 0) PlayerService.play(ctx, st.reciterId, 1)
-                                    else PlayerService.toggle(ctx)
-                                },
-                                shape = CircleShape,
-                                color = GoldShine,
-                                modifier = Modifier.size(42.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    if (ps.isLoading) CircularProgressIndicator(Modifier.size(20.dp), color = RoyalForest, strokeWidth = 2.5.dp)
-                                    else Icon(if (ps.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "تشغيل", tint = RoyalForest, modifier = Modifier.size(26.dp))
-                                }
-                            }
-                        }
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            r.name,
+                            color = if (isSelected) RoyalForest else p.ink,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 11.5.sp
+                        )
                     }
-                } else {
-                    Column(
+                }
+            }
+        }
+
+        // البحث والتصفية
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                placeholder = { Text("بحث سورة...", fontSize = 12.sp) },
+                leadingIcon = { Icon(Icons.Rounded.Search, null, tint = EmeraldVibrant, modifier = Modifier.size(18.dp)) },
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.weight(1f)
+            )
+            listOf("الكل", "محملة").forEachIndexed { idx, label ->
+                val sel = filterTab == idx
+                FilterChip(
+                    selected = sel,
+                    onClick = { fx.click(); filterTab = idx },
+                    label = { Text(label, fontWeight = FontWeight.ExtraBold, fontSize = 11.sp) },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = GoldShine,
+                        selectedLabelColor = RoyalForest
+                    )
+                )
+            }
+        }
+
+        // ============================================================
+        // 3. قائمة السور (مع تمييز واضح للسورة المشغّلة حالياً)
+        // ============================================================
+        LazyColumn(
+            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            if (filteredSurahs.isEmpty()) {
+                item { EmptyState(Icons.Rounded.MusicOff, "لا توجد سور مطابقة في هذا القسم") }
+            }
+            items(filteredSurahs, key = { it.num }) { s ->
+                val cached = remember(ps.cacheVersion, st.reciterId, s.num) { AudioCache.has(ctx, st.reciterId, s.num) }
+                val progress = ps.downloads["${st.reciterId}_${s.num}"]
+                val isCurrent = ps.surah == s.num && ps.reciterId == st.reciterId
+                val pctInt = ((progress ?: 0f) * 100).toInt().coerceIn(1, 99)
+
+                QCard(
+                    shape = RoundedCornerShape(18.dp),
+                    selected = isCurrent,
+                    borderColor = if (cached) GoldWarm else null,
+                    onClick = {
+                        if (isCurrent) PlayerService.toggle(ctx)
+                        else PlayerService.play(ctx, st.reciterId, s.num)
+                    }
+                ) {
+                    Row(
                         Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { fx.click(); manualExpanded = false }
-                                .padding(bottom = 6.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(Modifier.width(42.dp).height(4.dp).clip(CircleShape).background(GoldShine.copy(alpha = 0.6f)))
+                        NumberBadge(s.num, 36, highlighted = isCurrent)
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = "سُورَةُ ${s.name}",
+                                fontFamily = UthmanicFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                color = if (isCurrent) p.selectedInk else p.ink
+                            )
+                            Text(
+                                text = when {
+                                    progress != null -> "جارٍ التنزيل ($pctInt%)..."
+                                    cached -> "محملة • جاهزة بدون إنترنت ✓"
+                                    else -> "${s.type} • ${s.ayahs} آية"
+                                },
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = when {
+                                    isCurrent -> p.selectedInk.copy(alpha = 0.85f)
+                                    progress != null -> GoldWarm
+                                    cached -> EmeraldVibrant
+                                    else -> p.muted
+                                }
+                            )
                         }
 
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(52.dp)
-                                    .rotate(if (ps.isPlaying) discAngle else 0f)
-                                    .shadow(4.dp, CircleShape)
-                                    .clip(CircleShape)
-                                    .background(Brush.radialGradient(listOf(GoldShine, GoldWarm, RoyalForest)))
-                                    .border(1.8.dp, Color.White.copy(alpha = 0.7f), CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Box(Modifier.size(18.dp).clip(CircleShape).background(RoyalForest), contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.GraphicEq, null, tint = GoldShine, modifier = Modifier.size(12.dp))
-                                }
-                            }
-
-                            Spacer(Modifier.width(12.dp))
-
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    text = playingSurah?.let { "سُورَةُ ${it.name}" } ?: "سُورَةُ الْفَاتِحَةِ (اضغط تشغيل)",
-                                    color = Color.White,
-                                    fontFamily = UthmanicFontFamily,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = if (playingSurah != null) "${playingReciter.name} • ${playingReciter.style}" else "${selectedReciter.name} • ${selectedReciter.style}",
-                                    color = GoldShine,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-
-                            if (playingSurah != null) {
-                                IconButton(
-                                    onClick = { fx.click(); nav.openPage(playingSurah.page) },
+                        when {
+                            progress != null -> {
+                                Box(
+                                    contentAlignment = Alignment.Center,
                                     modifier = Modifier
-                                        .size(36.dp)
+                                        .size(42.dp)
                                         .clip(CircleShape)
-                                        .background(Color.White.copy(alpha = 0.14f))
+                                        .background(RoyalForest.copy(alpha = 0.12f))
                                 ) {
-                                    Icon(Icons.AutoMirrored.Filled.MenuBook, "اقرأ السورة", tint = GoldShine, modifier = Modifier.size(18.dp))
+                                    CircularProgressIndicator(
+                                        progress = { progress },
+                                        modifier = Modifier.size(36.dp),
+                                        color = GoldWarm,
+                                        strokeWidth = 3.dp
+                                    )
+                                    Text("$pctInt%", fontSize = 9.5.sp, fontWeight = FontWeight.ExtraBold, color = p.ink)
                                 }
                             }
-                        }
-
-                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                            Column(Modifier.fillMaxWidth()) {
-                                val frac = drag ?: if (ps.durationMs > 0) ps.positionMs / ps.durationMs.toFloat() else 0f
-                                Slider(
-                                    value = frac.coerceIn(0f, 1f),
-                                    onValueChange = { drag = it },
-                                    onValueChangeFinished = {
-                                        drag?.let { PlayerService.seek(ctx, (it * ps.durationMs).toInt()) }
-                                        drag = null
+                            cached -> {
+                                Surface(
+                                    onClick = {
+                                        fx.click()
+                                        if (isCurrent) PlayerService.toggle(ctx)
+                                        else PlayerService.play(ctx, st.reciterId, s.num)
                                     },
-                                    enabled = ps.surah > 0 && ps.durationMs > 0 && !ps.isLoading,
-                                    colors = SliderDefaults.colors(
-                                        thumbColor = GoldShine,
-                                        activeTrackColor = GoldShine,
-                                        inactiveTrackColor = Color.White.copy(alpha = 0.25f)
-                                    ),
-                                    modifier = Modifier.height(26.dp)
-                                )
-                                Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text(fmtMs(if (drag != null) (drag!! * ps.durationMs).toInt() else ps.positionMs), color = GoldSoftBg, fontWeight = FontWeight.Bold, fontSize = 10.sp)
-                                    Text(if (ps.isLoading) "جارٍ تحميل البث..." else fmtMs(ps.durationMs), color = GoldShine, fontWeight = FontWeight.Bold, fontSize = 10.sp)
-                                }
-
-                                Row(
-                                    Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                    horizontalArrangement = Arrangement.SpaceEvenly,
-                                    verticalAlignment = Alignment.CenterVertically
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (isCurrent && ps.isPlaying) GoldShine else EmeraldVibrant
                                 ) {
-                                    IconButton(onClick = { fx.click(); PlayerService.prev(ctx) }, enabled = ps.surah > 1, modifier = Modifier.size(36.dp)) {
-                                        Icon(Icons.Default.SkipPrevious, "السابقة", tint = Color.White, modifier = Modifier.size(26.dp))
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            if (isCurrent && ps.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                            null,
+                                            tint = if (isCurrent && ps.isPlaying) RoyalForest else GoldShine,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(
+                                            if (isCurrent && ps.isPlaying) "إيقاف" else "تشغيل",
+                                            color = if (isCurrent && ps.isPlaying) RoyalForest else Color.White,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 11.sp
+                                        )
                                     }
-                                    IconButton(onClick = { fx.click(); PlayerService.seekBy(ctx, -10_000) }, enabled = ps.surah > 0, modifier = Modifier.size(36.dp)) {
-                                        Icon(Icons.Default.Replay10, "رجوع 10ث", tint = GoldSoftBg, modifier = Modifier.size(24.dp))
+                                }
+                            }
+                            else -> {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    IconButton(
+                                        onClick = { fx.click(); PlayerService.download(ctx, st.reciterId, s.num) },
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(GoldWarm.copy(alpha = 0.15f))
+                                    ) {
+                                        Icon(Icons.Rounded.DownloadForOffline, "تنزيل", tint = GoldWarm, modifier = Modifier.size(20.dp))
                                     }
-                                    Surface(
+                                    IconButton(
                                         onClick = {
                                             fx.click()
-                                            if (ps.surah == 0) PlayerService.play(ctx, st.reciterId, 1)
-                                            else PlayerService.toggle(ctx)
+                                            if (isCurrent) PlayerService.toggle(ctx)
+                                            else PlayerService.play(ctx, st.reciterId, s.num)
                                         },
-                                        shape = CircleShape,
-                                        color = GoldShine,
-                                        border = BorderStroke(2.dp, Color.White),
-                                        shadowElevation = 6.dp,
-                                        modifier = Modifier.size(52.dp)
+                                        modifier = Modifier.size(38.dp)
                                     ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            if (ps.isLoading) CircularProgressIndicator(Modifier.size(24.dp), color = RoyalForest, strokeWidth = 3.dp)
-                                            else Icon(if (ps.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "تشغيل", tint = RoyalForest, modifier = Modifier.size(30.dp))
-                                        }
-                                    }
-                                    IconButton(onClick = { fx.click(); PlayerService.seekBy(ctx, 10_000) }, enabled = ps.surah > 0, modifier = Modifier.size(36.dp)) {
-                                        Icon(Icons.Default.Forward10, "تقديم 10ث", tint = GoldSoftBg, modifier = Modifier.size(24.dp))
-                                    }
-                                    IconButton(onClick = { fx.click(); PlayerService.next(ctx) }, enabled = ps.surah in 1..113, modifier = Modifier.size(36.dp)) {
-                                        Icon(Icons.Default.SkipNext, "التالية", tint = Color.White, modifier = Modifier.size(26.dp))
+                                        Icon(
+                                            if (isCurrent && ps.isPlaying) Icons.Rounded.PauseCircle else Icons.Rounded.PlayCircle,
+                                            "تشغيل",
+                                            tint = if (isCurrent) GoldShine else EmeraldVibrant,
+                                            modifier = Modifier.size(32.dp)
+                                        )
                                     }
                                 }
                             }
-                        }
-
-                        Spacer(Modifier.height(4.dp))
-                        val repeatLabel = when (ps.repeatMode) {
-                            1 -> "تحفيظ (${ps.repeatCount + 1}/3)"
-                            2 -> "تكرار ∞"
-                            else -> "تكرار"
-                        }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            StudioToolChip("${ps.speed}x", Icons.Default.Speed, ps.speed != 1.0f) { PlayerService.cycleSpeed(ctx) }
-                            StudioToolChip(repeatLabel, Icons.Default.RepeatOne, ps.repeatMode > 0) { PlayerService.cycleRepeat(ctx) }
-                            StudioToolChip("متتالية", Icons.Default.PlaylistPlay, ps.autoNext) { PlayerService.toggleAutoNext(ctx) }
-                            StudioToolChip(if (ps.sleepLeft > 0) "${ps.sleepLeft} د" else "نوم", Icons.Default.Bedtime, ps.sleepLeft > 0) { showSleep = true }
                         }
                     }
                 }
@@ -1122,7 +1035,7 @@ fun AudioScreen(nav: Nav) {
                         onValueChange = { reciterSearch = it },
                         singleLine = true,
                         placeholder = { Text("ابحث باسم الشيخ...", fontSize = 12.sp) },
-                        leadingIcon = { Icon(Icons.Default.Search, null, tint = TurquoiseAccent) },
+                        leadingIcon = { Icon(Icons.Rounded.Search, null, tint = EmeraldVibrant) },
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1140,24 +1053,24 @@ fun AudioScreen(nav: Nav) {
                                 if (ps.surah > 0) PlayerService.play(ctx, r.id, ps.surah)
                             },
                             shape = RoundedCornerShape(14.dp),
-                            color = if (active) EmeraldVibrant else p.bg,
-                            border = BorderStroke(1.dp, if (active) GoldShine else p.border)
+                            color = if (active) GoldShine else p.bg,
+                            border = BorderStroke(1.2.dp, if (active) RoyalForest else p.border)
                         ) {
                             Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.RecordVoiceOver, null, tint = if (active) GoldShine else TurquoiseAccent)
+                                Icon(Icons.Rounded.RecordVoiceOver, null, tint = if (active) RoyalForest else EmeraldVibrant)
                                 Spacer(Modifier.width(10.dp))
                                 Column(Modifier.weight(1f)) {
-                                    Text(r.name, fontWeight = FontWeight.ExtraBold, color = if (active) Color.White else p.ink, fontSize = 14.sp)
-                                    Text(r.style, fontSize = 11.sp, color = if (active) GoldSoftBg else p.muted, fontWeight = FontWeight.Bold)
+                                    Text(r.name, fontWeight = FontWeight.ExtraBold, color = if (active) RoyalForest else p.ink, fontSize = 14.sp)
+                                    Text(r.style, fontSize = 11.sp, color = if (active) RoyalForest.copy(alpha = 0.8f) else p.muted, fontWeight = FontWeight.Bold)
                                 }
-                                if (active) Icon(Icons.Default.CheckCircle, null, tint = GoldShine)
+                                if (active) Icon(Icons.Rounded.CheckCircle, null, tint = RoyalForest)
                             }
                         }
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showRecitersDialog = false }) { Text("إغلاق", fontWeight = FontWeight.ExtraBold, color = TurquoiseAccent) }
+                TextButton(onClick = { showRecitersDialog = false }) { Text("إغلاق", fontWeight = FontWeight.ExtraBold, color = EmeraldVibrant) }
             }
         )
     }
@@ -1171,7 +1084,7 @@ fun AudioScreen(nav: Nav) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(0 to "إلغاء المؤقت", 15 to "بعد 15 دقيقة", 30 to "بعد 30 دقيقة", 45 to "بعد 45 دقيقة", 60 to "بعد ساعة").forEach { (m, label) ->
                         TextButton(onClick = { PlayerService.setSleep(ctx, m); showSleep = false }, modifier = Modifier.fillMaxWidth()) {
-                            Text(label, fontWeight = FontWeight.ExtraBold, color = TurquoiseAccent)
+                            Text(label, fontWeight = FontWeight.ExtraBold, color = EmeraldVibrant)
                         }
                     }
                 }
@@ -1182,18 +1095,18 @@ fun AudioScreen(nav: Nav) {
 }
 
 @Composable
-private fun StudioToolChip(label: String, icon: ImageVector, active: Boolean, onClick: () -> Unit) {
+private fun ModernAudioChip(label: String, icon: ImageVector, active: Boolean, onClick: () -> Unit) {
     val fx = LocalFx.current
     Surface(
         onClick = { fx.click(); onClick() },
-        shape = RoundedCornerShape(12.dp),
-        color = if (active) GoldShine.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.08f),
-        border = BorderStroke(1.dp, if (active) GoldShine else Color.White.copy(alpha = 0.2f))
+        shape = RoundedCornerShape(10.dp),
+        color = if (active) GoldShine else Color.White.copy(alpha = 0.1f),
+        border = BorderStroke(1.dp, if (active) Color.White else Color.White.copy(alpha = 0.2f))
     ) {
-        Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = if (active) GoldShine else Color.White.copy(alpha = 0.8f), modifier = Modifier.size(15.dp))
+        Row(Modifier.padding(horizontal = 8.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, tint = if (active) RoyalForest else GoldSoftBg, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(4.dp))
-            Text(label, color = if (active) GoldShine else Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
+            Text(label, color = if (active) RoyalForest else Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 10.5.sp)
         }
     }
 }

@@ -18,6 +18,7 @@ import android.location.Geocoder
 import android.location.Location
 import android.location.LocationManager
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.os.Build
@@ -41,7 +42,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -100,6 +101,9 @@ val Top15Muezzins: List<MuezzinVoice> = listOf(
     MuezzinVoice("makkah", "أذان الحرم المكي الشريف", "مكة المكرمة", "https://media.blubrry.com/muslim_central_quran/podcasts.qurancentral.com/adhan/makkah-adhan.mp3")
 )
 
+private const val FALLBACK_ADHAN_URL =
+    "https://media.blubrry.com/muslim_central_quran/podcasts.qurancentral.com/adhan/makkah-adhan.mp3"
+
 // ============================================================
 // 2. محرك الحسابات الفلكية لمواقيت الصلاة واتجاه القبلة (PrayerCalc)
 // ============================================================
@@ -112,7 +116,6 @@ data class PrayerTimes(
     val isha: Double
 )
 
-/** حدث صلاة محدد بلحظة زمنية مطلقة. index: 0 فجر، 1 ظهر، 2 عصر، 3 مغرب، 4 عشاء */
 data class PrayerEvent(val index: Int, val name: String, val millis: Long)
 
 object PrayerCalc {
@@ -190,7 +193,6 @@ object PrayerCalc {
     private fun fixAngle(a: Double): Double = a - 360.0 * floor(a / 360.0)
     private fun fixHour(h: Double): Double = h - 24.0 * floor(h / 24.0)
 
-    /** يحسب مواقيت يوم التقويم cal (بمنطقته الزمنية) بدون أي تصحيح يدوي */
     fun compute(cal: Calendar, lat: Double, lng: Double, method: Int, hanafi: Boolean = false): PrayerTimes {
         val y = cal.get(Calendar.YEAR)
         val m = cal.get(Calendar.MONTH) + 1
@@ -222,7 +224,6 @@ object PrayerCalc {
             return dhuhr + if (ccw) -t else t
         }
 
-        // (زاوية الفجر، زاوية العشاء، فاصل العشاء بالدقائق بعد المغرب إن وُجد)
         val (fajrAngle, ishaAngle, ishaInterval) = when (method) {
             1 -> Triple(18.5, 0.0, 90.0)
             2 -> Triple(19.5, 17.5, 0.0)
@@ -245,7 +246,7 @@ object PrayerCalc {
 
         val maghribFixed = fixHour(maghrib)
         var ishaFixed = fixHour(isha)
-        if (ishaFixed < maghribFixed) ishaFixed += 24.0   // عشاء بعد منتصف الليل
+        if (ishaFixed < maghribFixed) ishaFixed += 24.0
 
         return PrayerTimes(
             fajr = fixHour(fajr),
@@ -257,7 +258,6 @@ object PrayerCalc {
         )
     }
 
-    /** المواقيت النهائية مع التصحيحات اليدوية (عامة + لكل صلاة) */
     fun timesFor(st: AppState, cal: Calendar): PrayerTimes {
         val t = compute(cal, st.geo.lat, st.geo.lng, st.prayerMethod, st.asrHanafi)
         fun adj(h: Double, i: Int) = h + st.totalAdjust(i) / 60.0
@@ -277,7 +277,6 @@ object PrayerCalc {
         return c.timeInMillis
     }
 
-    /** أحداث الصلوات الخمس (من أمس حتى days-1 يوماً قادمة) مرتبة زمنياً بلحظات مطلقة */
     fun events(st: AppState, fromMillis: Long, days: Int = 3): List<PrayerEvent> {
         val out = mutableListOf<PrayerEvent>()
         for (off in -1 until days) {
@@ -340,7 +339,7 @@ object PrayerCalc {
 }
 
 // ============================================================
-// 3. تحديد الموقع: تلقائي (GPS/الشبكة) أو يدوي — مع إذن الموقع واسم المدينة
+// 3. تحديد الموقع (LocationHelper)
 // ============================================================
 enum class LocStatus { OK, NO_PERMISSION, GPS_OFF, FAILED }
 
@@ -362,7 +361,6 @@ object LocationHelper {
         }
     }
 
-    /** يطلب موقعاً حقيقياً (لا يكتفي بآخر موقع محفوظ) من GPS والشبكة معاً، مع مهلة 15 ثانية */
     @SuppressLint("MissingPermission")
     private fun requestFix(ctx: Context, callback: (Location?) -> Unit) {
         val lm = ctx.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
@@ -415,7 +413,6 @@ object LocationHelper {
         }.getOrNull()
     }
 
-    /** يحدّد الموقع ويحفظه ويعيد جدولة الأذان. onResult(الحالة، اسم المدينة) */
     fun detectAndSave(ctx: Context, st: AppState, onResult: (LocStatus, String) -> Unit) {
         val appCtx = ctx.applicationContext
         if (!hasPermission(appCtx)) { onResult(LocStatus.NO_PERMISSION, ""); return }
@@ -436,7 +433,6 @@ object LocationHelper {
         }
     }
 
-    /** يُستدعى عند فتح التطبيق: يحدّث الموقع بصمت إن كان الوضع تلقائياً ومرّت 6 ساعات */
     fun refreshIfNeeded(ctx: Context, st: AppState) {
         if (st.locationMode != 0 || !st.autoLocRefresh) return
         if (System.currentTimeMillis() - st.lastLocFetch < 6 * 3_600_000L) return
@@ -457,7 +453,6 @@ object LocationHelper {
     }
 }
 
-/** يعيد دالة تطلب إذن الموقع عند الحاجة ثم تحدّد الموقع تلقائياً وتبلّغ بالنتيجة */
 @Composable
 fun rememberAutoLocationAction(onStatus: (LocStatus, String) -> Unit): () -> Unit {
     val ctx = LocalContext.current
@@ -485,7 +480,9 @@ fun locStatusMessage(s: LocStatus, name: String): String = when (s) {
 }
 
 // ============================================================
-// 4. محرك الأذان والتذكيرات (AdhanEngine & AdhanAlarmReceiver)
+// 4. محرك الأذان الفوري المصلح بالكامل (AdhanEngine & AdhanAlarmReceiver)
+// - يعمل في وقت الصلاة المحدد مباشرة بدون أي منبه مسبق
+// - يرفع مستوى صوت المنبّه تلقائياً + يجرّب الملف المحلي ثم البث المباشر ثم الرابط الاحتياطي
 // ============================================================
 object AdhanEngine {
     private const val PREF_NAME = "adhan_engine_prefs"
@@ -510,7 +507,6 @@ object AdhanEngine {
         appCtx.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE).edit().putString("muezzin_id", id).apply()
         _activeMuezzinId.value = id
         val voice = getSelectedMuezzin(appCtx)
-        // تحميل صوت المؤذن فوراً في الخلفية ليعمل بدون إنترنت لحظة دخول وقت الصلاة
         scope.launch {
             val outFile = localVoiceFile(appCtx, voice.id)
             if (!outFile.exists() || outFile.length() < 4096) {
@@ -524,13 +520,50 @@ object AdhanEngine {
         return File(dir, "muezzin_$id.mp3")
     }
 
+    /** رفع صوت المنبّه في النظام لضمان سماع صوت المؤذن بوضوح */
+    private fun ensureAlarmVolumeAudible(ctx: Context) {
+        runCatching {
+            val am = ctx.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+            val maxAlarm = am.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+            val curAlarm = am.getStreamVolume(AudioManager.STREAM_ALARM)
+            if (curAlarm < (maxAlarm * 0.6f).toInt()) {
+                am.setStreamVolume(AudioManager.STREAM_ALARM, (maxAlarm * 0.85f).toInt().coerceAtLeast(1), 0)
+            }
+        }
+    }
+
     fun playAdhanNow(ctx: Context, prayerName: String = "الصلاة") {
         val appCtx = ctx.applicationContext
         QuranAudioEngine.pauseIfPlaying(appCtx)
         stopAdhan(appCtx)
+        ensureAlarmVolumeAudible(appCtx)
 
         val voice = getSelectedMuezzin(appCtx)
         val localFile = localVoiceFile(appCtx, voice.id)
+
+        val sources = buildList {
+            if (localFile.exists() && localFile.length() > 4096) add(localFile.absolutePath)
+            add(voice.url)
+            add(voice.url.replace("https://", "http://"))
+            add(FALLBACK_ADHAN_URL)
+        }.distinct()
+
+        tryPlaySource(appCtx, prayerName, voice, localFile, sources, 0)
+    }
+
+    private fun tryPlaySource(
+        appCtx: Context,
+        prayerName: String,
+        voice: MuezzinVoice,
+        localFile: File,
+        sources: List<String>,
+        step: Int
+    ) {
+        if (step >= sources.size) {
+            playFallbackAlarmTone(appCtx, prayerName)
+            return
+        }
+
         val player = MediaPlayer()
         adhanPlayer = player
 
@@ -538,34 +571,35 @@ object AdhanEngine {
             player.setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                     .build()
             )
             player.setWakeMode(appCtx, PowerManager.PARTIAL_WAKE_LOCK)
+            player.setVolume(1.0f, 1.0f)
 
-            if (localFile.exists() && localFile.length() > 4096) {
-                player.setDataSource(localFile.absolutePath)
-            } else {
-                player.setDataSource(voice.url)
-                // حفظ نسخة محلية للمرات القادمة
-                scope.launch { QuranAudioEngine.downloadWithResume(appCtx, voice.url, localFile) }
-            }
+            val src = sources[step]
+            player.setDataSource(src)
 
             player.setOnPreparedListener { m ->
                 m.start()
                 _isPlaying.value = true
                 showAdhanNotification(appCtx, prayerName, voice.name)
+                if (src.startsWith("http") && (!localFile.exists() || localFile.length() < 4096)) {
+                    scope.launch { QuranAudioEngine.downloadWithResume(appCtx, voice.url, localFile) }
+                }
             }
             player.setOnCompletionListener {
                 stopAdhan(appCtx)
             }
             player.setOnErrorListener { _, _, _ ->
-                playFallbackAlarmTone(appCtx, prayerName)
+                runCatching { player.reset(); player.release() }
+                tryPlaySource(appCtx, prayerName, voice, localFile, sources, step + 1)
                 true
             }
             player.prepareAsync()
         } catch (_: Exception) {
-            playFallbackAlarmTone(appCtx, prayerName)
+            runCatching { player.reset(); player.release() }
+            tryPlaySource(appCtx, prayerName, voice, localFile, sources, step + 1)
         }
     }
 
@@ -587,7 +621,7 @@ object AdhanEngine {
             }
             adhanPlayer = mp
             _isPlaying.value = true
-            showAdhanNotification(ctx, prayerName, "تنبيه دخول وقت الصلاة")
+            showAdhanNotification(ctx, prayerName, "حان وقت الصلاة")
         }
     }
 
@@ -649,9 +683,6 @@ object AdhanEngine {
         try { nm.notify(id, notif) } catch (_: SecurityException) { }
     }
 
-    // ============================================================
-    // الجدولة: الأذان بـ setAlarmClock (دقيق ويخترق وضع السكون) + تذكيرات الأذكار والورد
-    // ============================================================
     private fun alarmIntent(ctx: Context, code: Int, action: String, extra: String? = null, flags: Int): PendingIntent? {
         val intent = Intent(ctx, AdhanAlarmReceiver::class.java).apply {
             this.action = action
@@ -677,6 +708,7 @@ object AdhanEngine {
         }
     }
 
+    /** جدولة الأذان في الوقت المحدد بالضبط (بدون أي تنبيه قبله) */
     @SuppressLint("ScheduleExactAlarm")
     fun scheduleAll(ctx: Context, st: AppState) {
         val appCtx = ctx.applicationContext
@@ -685,7 +717,6 @@ object AdhanEngine {
         val events = PrayerCalc.events(st, now, 3)
         val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
 
-        // ---- الأذان ----
         if (st.prayerAlert) {
             val voice = getSelectedMuezzin(appCtx)
             scope.launch {
@@ -695,7 +726,7 @@ object AdhanEngine {
                 }
             }
             for (idx in 0..4) {
-                val ev = events.firstOrNull { it.index == idx && it.millis > now + 5_000L } ?: continue
+                val ev = events.firstOrNull { it.index == idx && it.millis > now + 2_000L } ?: continue
                 val pi = alarmIntent(appCtx, 101 + idx, "ACTION_TRIGGER_ADHAN", ev.name, flags) ?: continue
                 try {
                     am.setAlarmClock(AlarmManager.AlarmClockInfo(ev.millis, Notifs.contentIntent(appCtx, null, 90)), pi)
@@ -707,7 +738,6 @@ object AdhanEngine {
             for (idx in 0..4) cancelCode(appCtx, am, 101 + idx, "ACTION_TRIGGER_ADHAN")
         }
 
-        // ---- تذكير أذكار الصباح (بعد الفجر بنصف ساعة) وأذكار المساء (بعد العصر بنصف ساعة) ----
         val half = 30 * 60_000L
         if (st.adhkarAlert) {
             events.filter { it.index == 0 && it.millis + half > now + 5_000L }.minByOrNull { it.millis }?.let { ev ->
@@ -721,7 +751,6 @@ object AdhanEngine {
             cancelCode(appCtx, am, 202, "ACTION_REMINDER")
         }
 
-        // ---- تذكير الورد اليومي بالوقت الذي يختاره المستخدم ----
         if (st.dailyReminder) {
             val c = AppClock.calendar(st, now).apply {
                 set(Calendar.HOUR_OF_DAY, st.reminderHour)
@@ -754,17 +783,16 @@ class AdhanAlarmReceiver : BroadcastReceiver() {
         when (intent?.action) {
             "ACTION_STOP_ADHAN" -> AdhanEngine.stopAdhan(appCtx)
             "ACTION_TRIGGER_ADHAN" -> {
-                // إيقاظ المعالج فوراً لضمان تشغيل الأذان حتى والشاشة مغلقة
                 val pm = appCtx.getSystemService(Context.POWER_SERVICE) as? PowerManager
                 val wl = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "QuranApp:AdhanWakeLock")
-                wl?.acquire(60_000L)
+                wl?.acquire(90_000L)
 
-                val prayerName = intent?.getStringExtra("prayer_name") ?: "الصلاة"
+                val prayerName = intent.getStringExtra("prayer_name") ?: "الصلاة"
                 AdhanEngine.playAdhanNow(appCtx, prayerName)
                 AdhanEngine.ensureSchedulesOnBoot(appCtx)
             }
             "ACTION_REMINDER" -> {
-                AdhanEngine.showReminder(appCtx, intent?.getStringExtra("prayer_name") ?: "wird")
+                AdhanEngine.showReminder(appCtx, intent.getStringExtra("prayer_name") ?: "wird")
                 AdhanEngine.ensureSchedulesOnBoot(appCtx)
             }
             Intent.ACTION_BOOT_COMPLETED,
@@ -776,7 +804,7 @@ class AdhanAlarmReceiver : BroadcastReceiver() {
 }
 
 // ============================================================
-// 5. نوافذ مشتركة: اختيار المدينة/الموقع، الإحداثيات اليدوية، المؤذن، طريقة الحساب
+// 5. نوافذ مشتركة: اختيار المدينة، الإحداثيات اليدوية، المؤذن، طريقة الحساب
 // ============================================================
 @Composable
 fun LocationPickerDialog(onDismiss: () -> Unit) {
@@ -826,7 +854,7 @@ fun LocationPickerDialog(onDismiss: () -> Unit) {
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = RoyalForest, strokeWidth = 2.dp)
-                        else Icon(Icons.Default.MyLocation, null, tint = RoyalForest)
+                        else Icon(Icons.Rounded.MyLocation, null, tint = RoyalForest)
                         Spacer(Modifier.width(8.dp))
                         Text("تحديد موقعي تلقائياً (GPS)", color = RoyalForest, fontWeight = FontWeight.ExtraBold)
                     }
@@ -850,7 +878,7 @@ fun LocationPickerDialog(onDismiss: () -> Unit) {
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.EditLocationAlt, null, tint = TurquoiseAccent, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Rounded.EditLocationAlt, null, tint = TurquoiseAccent, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text("إدخال الاسم والإحداثيات يدوياً", fontWeight = FontWeight.ExtraBold, color = p.ink, fontSize = 13.sp)
                     }
@@ -861,7 +889,7 @@ fun LocationPickerDialog(onDismiss: () -> Unit) {
                         onValueChange = { query = it },
                         singleLine = true,
                         placeholder = { Text("ابحث عن مدينتك...", fontSize = 12.5.sp) },
-                        leadingIcon = { Icon(Icons.Default.Search, null, tint = EmeraldVibrant) },
+                        leadingIcon = { Icon(Icons.Rounded.Search, null, tint = EmeraldVibrant) },
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -877,22 +905,19 @@ fun LocationPickerDialog(onDismiss: () -> Unit) {
                             onDismiss()
                         },
                         shape = RoundedCornerShape(12.dp),
-                        color = if (active) EmeraldVibrant else p.bg,
-                        border = BorderStroke(1.dp, if (active) GoldShine else p.border)
+                        color = if (active) GoldShine else p.bg,
+                        border = BorderStroke(1.2.dp, if (active) RoyalForest else p.border)
                     ) {
                         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 city.name,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = if (active) Color.White else p.ink,
+                                color = if (active) RoyalForest else p.ink,
                                 modifier = Modifier.weight(1f)
                             )
-                            if (active) Icon(Icons.Default.CheckCircle, null, tint = GoldShine)
+                            if (active) Icon(Icons.Rounded.CheckCircle, null, tint = RoyalForest)
                         }
                     }
-                }
-                if (cities.isEmpty()) {
-                    item { Text("لا توجد مدينة بهذا الاسم، استخدم الإحداثيات اليدوية.", color = p.muted, fontSize = 12.sp) }
                 }
             }
         },
@@ -941,10 +966,6 @@ fun ManualCoordsDialog(onDismiss: () -> Unit, onSaved: () -> Unit) {
                     label = { Text("خط الطول (من -180 إلى 180)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
-                )
-                Text(
-                    "تجد إحداثيات مكانك من تطبيق الخرائط بالضغط المطوّل على الموقع.",
-                    color = p.muted, fontSize = 11.5.sp
                 )
                 if (error != null) Text(error!!, color = DangerRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
@@ -997,17 +1018,17 @@ fun MuezzinPickerDialog(onDismiss: () -> Unit) {
                             Toast.makeText(ctx, "تم اختيار المؤذن: ${m.name} ✓", Toast.LENGTH_SHORT).show()
                         },
                         shape = RoundedCornerShape(14.dp),
-                        color = if (active) EmeraldVibrant else p.bg,
-                        border = BorderStroke(1.dp, if (active) GoldShine else p.border)
+                        color = if (active) GoldShine else p.bg,
+                        border = BorderStroke(1.2.dp, if (active) RoyalForest else p.border)
                     ) {
                         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.RecordVoiceOver, null, tint = if (active) GoldShine else TurquoiseAccent)
+                            Icon(Icons.Rounded.RecordVoiceOver, null, tint = if (active) RoyalForest else EmeraldVibrant)
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(m.name, fontWeight = FontWeight.ExtraBold, color = if (active) Color.White else p.ink, fontSize = 14.sp)
-                                Text(m.title, fontSize = 11.sp, color = if (active) GoldSoftBg else p.muted, fontWeight = FontWeight.Bold)
+                                Text(m.name, fontWeight = FontWeight.ExtraBold, color = if (active) RoyalForest else p.ink, fontSize = 14.sp)
+                                Text(m.title, fontSize = 11.sp, color = if (active) RoyalForest.copy(alpha = 0.8f) else p.muted, fontWeight = FontWeight.Bold)
                             }
-                            if (active) Icon(Icons.Default.CheckCircle, null, tint = GoldShine)
+                            if (active) Icon(Icons.Rounded.CheckCircle, null, tint = RoyalForest)
                         }
                     }
                 }
@@ -1031,6 +1052,7 @@ fun MethodPickerDialog(onDismiss: () -> Unit) {
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 PrayerCalc.methodNames.forEachIndexed { idx, mName ->
+                    val sel = st.prayerMethod == idx
                     Surface(
                         onClick = {
                             fx.click()
@@ -1039,12 +1061,13 @@ fun MethodPickerDialog(onDismiss: () -> Unit) {
                             onDismiss()
                         },
                         shape = RoundedCornerShape(12.dp),
-                        color = if (st.prayerMethod == idx) EmeraldVibrant else p.bg
+                        color = if (sel) GoldShine else p.bg,
+                        border = BorderStroke(1.dp, if (sel) RoyalForest else p.border)
                     ) {
                         Text(
                             text = mName,
-                            color = if (st.prayerMethod == idx) Color.White else p.ink,
-                            fontWeight = FontWeight.Bold,
+                            color = if (sel) RoyalForest else p.ink,
+                            fontWeight = FontWeight.ExtraBold,
                             fontSize = 13.sp,
                             modifier = Modifier.fillMaxWidth().padding(12.dp)
                         )
@@ -1075,6 +1098,20 @@ fun PrayerScreen(nav: Nav) {
     var showMethodDialog by remember { mutableStateOf(false) }
     var showQiblaDialog by remember { mutableStateOf(false) }
 
+    LaunchedEffect(nav.openQiblaOnPrayer) {
+        if (nav.openQiblaOnPrayer) {
+            nav.openQiblaOnPrayer = false
+            showQiblaDialog = true
+        }
+    }
+
+    val canScheduleExact = remember {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val am = ctx.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+            am?.canScheduleExactAlarms() ?: true
+        } else true
+    }
+
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         AdhanEngine.scheduleAll(ctx, st)
@@ -1090,7 +1127,6 @@ fun PrayerScreen(nav: Nav) {
             ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
-    val notificationsOn = NotificationManagerCompat.from(ctx).areNotificationsEnabled()
 
     val cal = AppClock.calendar(st, nowMillis)
     val dayKey = cal.get(Calendar.DAY_OF_YEAR) * 10000 + cal.get(Calendar.YEAR)
@@ -1103,12 +1139,12 @@ fun PrayerScreen(nav: Nav) {
     val currentHour = AppClock.hourDecimal(cal)
 
     val prayerList = listOf(
-        Triple("الفجر", times.fajr, Icons.Default.NightsStay),
-        Triple("الشروق", times.sunrise, Icons.Default.WbTwilight),
-        Triple("الظهر", times.dhuhr, Icons.Default.WbSunny),
-        Triple("العصر", times.asr, Icons.Default.LightMode),
-        Triple("المغرب", times.maghrib, Icons.Default.Brightness4),
-        Triple("العشاء", times.isha, Icons.Default.Bedtime)
+        Triple("الفجر", times.fajr, Icons.Rounded.NightsStay),
+        Triple("الشروق", times.sunrise, Icons.Rounded.WbTwilight),
+        Triple("الظهر", times.dhuhr, Icons.Rounded.WbSunny),
+        Triple("العصر", times.asr, Icons.Rounded.LightMode),
+        Triple("المغرب", times.maghrib, Icons.Rounded.Brightness4),
+        Triple("العشاء", times.isha, Icons.Rounded.Bedtime)
     )
 
     Column(
@@ -1122,10 +1158,10 @@ fun PrayerScreen(nav: Nav) {
             onBack = { nav.back() },
             trailing = {
                 IconButton(onClick = { fx.click(); nav.openSettings(0) }) {
-                    Icon(Icons.Default.Tune, "إعدادات الموقع والوقت", tint = GoldShine)
+                    Icon(Icons.Rounded.Tune, "إعدادات الموقع والوقت", tint = GoldShine)
                 }
                 IconButton(onClick = { fx.click(); showQiblaDialog = true }) {
-                    Icon(Icons.Default.Explore, "اتجاه القبلة", tint = GoldShine)
+                    Icon(Icons.Rounded.Explore, "اتجاه القبلة", tint = GoldShine)
                 }
             }
         )
@@ -1137,27 +1173,21 @@ fun PrayerScreen(nav: Nav) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (!notificationsOn) {
+            if (!canScheduleExact && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 Surface(
                     onClick = {
-                        runCatching {
-                            ctx.startActivity(
-                                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                                    .putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            )
-                        }
+                        runCatching { ctx.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)) }
                     },
                     shape = RoundedCornerShape(18.dp),
                     color = DangerRed,
                     border = BorderStroke(1.dp, GoldShine)
                 ) {
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.NotificationsOff, null, tint = GoldShine, modifier = Modifier.size(26.dp))
+                        Icon(Icons.Rounded.Warning, null, tint = GoldShine, modifier = Modifier.size(26.dp))
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("الإشعارات متوقفة", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
-                            Text("فعّلها حتى يصلك تنبيه الأذان والتذكيرات. اضغط هنا لفتح الإعدادات.", color = GoldSoftBg, fontSize = 11.5.sp)
+                            Text("تفعيل إذن الأذان الدقيق", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+                            Text("اضغط هنا للسماح للتطبيق بالأذان في الوقت المحدد بدقة", color = GoldSoftBg, fontSize = 11.5.sp)
                         }
                     }
                 }
@@ -1167,7 +1197,7 @@ fun PrayerScreen(nav: Nav) {
             Surface(
                 shape = RoundedCornerShape(26.dp),
                 color = RoyalForest,
-                border = BorderStroke(1.4.dp, GoldWarm.copy(alpha = 0.7f)),
+                border = BorderStroke(1.4.dp, GoldWarm.copy(alpha = 0.75f)),
                 shadowElevation = 8.dp
             ) {
                 Box(
@@ -1193,7 +1223,7 @@ fun PrayerScreen(nav: Nav) {
                                 color = Color.White.copy(alpha = 0.14f)
                             ) {
                                 Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.LocationOn, null, tint = GoldShine, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Rounded.LocationOn, null, tint = GoldShine, modifier = Modifier.size(16.dp))
                                     Spacer(Modifier.width(4.dp))
                                     Text(st.geo.name, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 12.5.sp)
                                 }
@@ -1227,21 +1257,6 @@ fun PrayerScreen(nav: Nav) {
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp
                         )
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = "${ArabicDate.weekday(cal)} • ${HijriCalendar.format(cal, st.hijriOffset)} • ${ArabicDate.gregorian(cal, st.monthStyle)}",
-                            color = GoldSoftBg,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.5.sp,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = if (st.prayerAlert) "منبّه الأذان التلقائي مفعّل ✓" else "منبّه الأذان متوقف حالياً",
-                            color = if (st.prayerAlert) GoldShine else Color.White.copy(alpha = 0.7f),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
                     }
                 }
             }
@@ -1266,7 +1281,7 @@ fun PrayerScreen(nav: Nav) {
                                 st.prayerAlert = enabled
                                 if (enabled) {
                                     AdhanEngine.scheduleAll(ctx, st)
-                                    Toast.makeText(ctx, "تم تفعيل الأذان التلقائي لجميع الصلوات ✓", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(ctx, "تم تفعيل الأذان الفوري لجميع الصلوات ✓", Toast.LENGTH_SHORT).show()
                                 } else {
                                     AdhanEngine.cancelAll(ctx)
                                 }
@@ -1282,7 +1297,7 @@ fun PrayerScreen(nav: Nav) {
                             colors = ButtonDefaults.buttonColors(containerColor = EmeraldVibrant),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Icon(Icons.Default.RecordVoiceOver, null, tint = GoldShine, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Rounded.RecordVoiceOver, null, tint = GoldShine, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
                             Text("تغيير المؤذن", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 12.5.sp)
                         }
@@ -1297,7 +1312,7 @@ fun PrayerScreen(nav: Nav) {
                                 contentColor = if (isAdhanPlaying) Color.White else RoyalForest
                             )
                         ) {
-                            Icon(if (isAdhanPlaying) Icons.Default.Stop else Icons.Default.VolumeUp, null, modifier = Modifier.size(18.dp))
+                            Icon(if (isAdhanPlaying) Icons.Rounded.Stop else Icons.Rounded.VolumeUp, null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(4.dp))
                             Text(if (isAdhanPlaying) "إيقاف" else "تجربة الصوت", fontWeight = FontWeight.ExtraBold, fontSize = 12.5.sp)
                         }
@@ -1305,15 +1320,14 @@ fun PrayerScreen(nav: Nav) {
                 }
             }
 
-            // 3. جدول الصلوات
+            // 3. جدول الصلوات (تمييز واضح للصلاة القادمة)
             SectionTitle("مواقيت اليوم")
             prayerList.forEach { (name, timeH, icon) ->
                 val isNext = name == next.name && name != "الشروق"
                 val passed = timeH < currentHour && !isNext
                 QCard(
                     shape = RoundedCornerShape(18.dp),
-                    color = if (isNext) EmeraldVibrant.copy(alpha = 0.14f) else p.card,
-                    borderColor = if (isNext) GoldWarm else p.border
+                    selected = isNext
                 ) {
                     Row(
                         modifier = Modifier
@@ -1326,34 +1340,27 @@ fun PrayerScreen(nav: Nav) {
                             modifier = Modifier
                                 .size(38.dp)
                                 .clip(RoundedCornerShape(11.dp))
-                                .background(if (isNext) EmeraldVibrant else TurquoiseAccent.copy(alpha = 0.12f))
+                                .background(if (isNext) GoldWarm else EmeraldVibrant.copy(alpha = 0.14f))
                         ) {
-                            Icon(icon, null, tint = if (isNext) GoldShine else TurquoiseAccent, modifier = Modifier.size(20.dp))
+                            Icon(icon, null, tint = if (isNext) RoyalForest else EmeraldVibrant, modifier = Modifier.size(20.dp))
                         }
                         Spacer(Modifier.width(12.dp))
                         Text(
                             text = name,
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 17.sp,
-                            color = if (passed) p.muted else p.ink,
+                            color = if (isNext) p.selectedInk else if (passed) p.muted else p.ink,
                             modifier = Modifier.weight(1f)
                         )
                         Text(
                             text = PrayerCalc.formatTime(timeH, st.use24h),
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 17.sp,
-                            color = if (isNext) GoldWarm else if (passed) p.muted else EmeraldVibrant
+                            color = if (isNext) p.selectedInk else if (passed) p.muted else EmeraldVibrant
                         )
                     }
                 }
             }
-
-            Text(
-                text = "يمكنك تعديل الوقت والمنطقة الزمنية وتصحيح الدقائق من: الإعدادات ◂ الموقع والوقت.",
-                color = p.muted,
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.Bold
-            )
         }
     }
 
@@ -1425,7 +1432,6 @@ private fun QiblaCompassDialog(lat: Double, lng: Double, cityName: String, onDis
                     fontSize = 13.5.sp
                 )
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.size(230.dp)) {
-                    // القرص يدور عكس اتجاه الهاتف ليبقى الشمال ثابتاً في الواقع
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -1455,14 +1461,13 @@ private fun QiblaCompassDialog(lat: Double, lng: Double, cityName: String, onDis
                         )
                         Box(Modifier.fillMaxSize().rotate(qibla), contentAlignment = Alignment.TopCenter) {
                             Icon(
-                                Icons.Default.Mosque,
+                                Icons.Rounded.Mosque,
                                 contentDescription = "القبلة",
                                 tint = if (aligned) GoldShine else Color.White,
                                 modifier = Modifier.padding(top = 40.dp).size(34.dp)
                             )
                         }
                     }
-                    // مؤشر ثابت يمثل اتجاه الهاتف
                     Box(
                         Modifier
                             .align(Alignment.TopCenter)
@@ -1474,7 +1479,7 @@ private fun QiblaCompassDialog(lat: Double, lng: Double, cityName: String, onDis
                 }
                 Text(
                     text = when {
-                        !hasSensor -> "جهازك لا يحتوي على حساس البوصلة. اتجاه القبلة بالأعلى بالدرجات من الشمال."
+                        !hasSensor -> "جهازك لا يحتوي على حساس البوصلة."
                         aligned -> "أنت الآن باتجاه القبلة ✓"
                         else -> "ضع الهاتف أفقياً وأدره حتى تقف أيقونة المسجد عند المؤشر الأعلى"
                     },

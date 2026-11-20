@@ -5,7 +5,6 @@ import android.content.SharedPreferences
 import androidx.compose.runtime.*
 import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 import java.util.SimpleTimeZone
 import java.util.TimeZone
@@ -252,7 +251,7 @@ object QuranData {
 }
 
 // ============================================================
-// 3. مفوّضات الحفظ الدائم (تحفظ تلقائياً في SharedPreferences وتحدّث الواجهة فوراً)
+// 3. مفوّضات الحفظ الدائم
 // ============================================================
 class PersistedInt(
     private val sp: SharedPreferences,
@@ -310,10 +309,9 @@ class PersistedString(private val sp: SharedPreferences, private val key: String
 }
 
 // ============================================================
-// 4. الساعة المعتمدة في التطبيق + التحية + التاريخ الهجري والميلادي
+// 4. الساعة المعتمدة في التطبيق + التاريخ الهجري والميلادي
 // ============================================================
 object AppClock {
-    /** المنطقة الزمنية المعتمدة: من الجهاز (تلقائي) أو إزاحة UTC يدوية */
     fun zone(st: AppState): TimeZone =
         if (st.timeMode == 1) SimpleTimeZone(st.manualUtcMin * 60_000, "UTC-MANUAL") else TimeZone.getDefault()
 
@@ -322,20 +320,6 @@ object AppClock {
 
     fun hourDecimal(cal: Calendar): Double =
         cal.get(Calendar.HOUR_OF_DAY) + cal.get(Calendar.MINUTE) / 60.0 + cal.get(Calendar.SECOND) / 3600.0
-
-    fun greeting(cal: Calendar): String = when (cal.get(Calendar.HOUR_OF_DAY)) {
-        in 4..11 -> "صَبَاحُ الْخَيْرِ"
-        in 12..16 -> "طَابَ يَوْمُكَ"
-        in 17..21 -> "مَسَاءُ الْخَيْرِ"
-        else -> "طَابَتْ لَيْلَتُكَ"
-    }
-
-    fun greetingSub(cal: Calendar): String = when (cal.get(Calendar.HOUR_OF_DAY)) {
-        in 4..11 -> "ابدأ يومك بذكر الله وتلاوة وِردك"
-        in 12..16 -> "نَوَّرَ اللَّهُ يَوْمَكَ بِالْقُرْآنِ وَالذِّكْرِ"
-        in 17..21 -> "اختم يومك بالأذكار وصفحات من القرآن"
-        else -> "لا تنسَ أذكار النوم وقيام الليل"
-    }
 
     fun formatClock(cal: Calendar, use24h: Boolean): String {
         val h = cal.get(Calendar.HOUR_OF_DAY)
@@ -379,7 +363,6 @@ object HijriCalendar {
         "رجب", "شعبان", "رمضان", "شوال", "ذو القعدة", "ذو الحجة"
     )
 
-    /** يحوّل التاريخ الميلادي إلى هجري (حساب جدولي) ويعيد Triple(سنة، شهر 1..12، يوم) */
     fun fromGregorian(y: Int, m: Int, d: Int): Triple<Int, Int, Int> {
         val a = (14 - m) / 12
         val yy = y + 4800 - a
@@ -396,7 +379,6 @@ object HijriCalendar {
         return Triple(year, month, day)
     }
 
-    /** offsetDays: تصحيح يدوي بين -2 و +2 يوم لمطابقة رؤية الهلال في بلدك */
     fun format(cal: Calendar, offsetDays: Int): String {
         val c = cal.clone() as Calendar
         c.add(Calendar.DAY_OF_YEAR, offsetDays)
@@ -409,39 +391,34 @@ object HijriCalendar {
 // 5. إدارة الحالة المشتركة والتخزين الدائم (AppState)
 // ============================================================
 class AppState(ctx: Context) {
-    private val sp = ctx.applicationContext.getSharedPreferences("quran_app_v3_prefs", Context.MODE_PRIVATE)
+    private val sp = ctx.applicationContext.getSharedPreferences("quran_app_v4_prefs", Context.MODE_PRIVATE)
 
-    // ---- القراءة والإنجاز ----
     var lastPage by PersistedInt(sp, "last_page", 1, 1..604)
     var dailyGoal by PersistedInt(sp, "daily_goal", 5, 1..60)
     var streak by PersistedInt(sp, "streak", 0, 0..100000)
     var totalTasbih by PersistedInt(sp, "total_tasbih", 0, 0..Int.MAX_VALUE)
     var reciterId by PersistedString(sp, "reciter_id", "afs")
 
-    // ---- المظهر والقراءة ----
     var nightMode by PersistedBool(sp, "night_mode", false)
     var paperWarmth by PersistedBool(sp, "paper_warmth", true)
     var keepOn by PersistedBool(sp, "keep_on", true)
     var mushafFontScale by PersistedFloat(sp, "mushaf_font_scale", 1.0f, 0.8f..1.5f)
     var adhkarFontScale by PersistedFloat(sp, "adhkar_font_scale", 1.0f, 0.8f..1.5f)
     var tasbihFontScale by PersistedFloat(sp, "tasbih_font_scale", 1.0f, 0.8f..1.6f)
-    var monthStyle by PersistedInt(sp, "month_style", 0, 0..1)     // 0 يناير.. | 1 كانون الثاني..
+    var monthStyle by PersistedInt(sp, "month_style", 0, 0..1)
     var use24h by PersistedBool(sp, "use_24h", false)
 
-    // ---- الصوت والاهتزاز ----
     var soundOn by PersistedBool(sp, "sound_on", true)
     var vibOn by PersistedBool(sp, "vib_on", true)
     var stageVib by PersistedBool(sp, "stage_vib", true)
 
-    // ---- التذكيرات ----
     var dailyReminder by PersistedBool(sp, "daily_reminder", true)
     var reminderHour by PersistedInt(sp, "reminder_hour", 20, 0..23)
     var reminderMinute by PersistedInt(sp, "reminder_minute", 0, 0..59)
     var adhkarAlert by PersistedBool(sp, "adhkar_alert", true)
     var prayerAlert by PersistedBool(sp, "prayer_alert", true)
 
-    // ---- الموقع ----
-    var locationMode by PersistedInt(sp, "location_mode", 1, 0..1)   // 0 تلقائي GPS | 1 يدوي
+    var locationMode by PersistedInt(sp, "location_mode", 1, 0..1)
     var autoLocRefresh by PersistedBool(sp, "auto_loc_refresh", true)
     var lastLocFetch by PersistedLong(sp, "last_loc_fetch", 0L)
 
@@ -463,8 +440,7 @@ class AppState(ctx: Context) {
             .apply()
     }
 
-    // ---- الوقت والمواقيت ----
-    var timeMode by PersistedInt(sp, "time_mode", 0, 0..1)           // 0 تلقائي من الجهاز | 1 يدوي
+    var timeMode by PersistedInt(sp, "time_mode", 0, 0..1)
     var manualUtcMin by PersistedInt(sp, "manual_utc_min", 180, -720..840)
     var prayerMethod by PersistedInt(sp, "prayer_method", 0, 0..7)
     var asrHanafi by PersistedBool(sp, "asr_hanafi", false)
@@ -477,7 +453,6 @@ class AppState(ctx: Context) {
     var adjMaghrib by PersistedInt(sp, "adj_maghrib", 0, -30..30)
     var adjIsha by PersistedInt(sp, "adj_isha", 0, -30..30)
 
-    /** مجموع التصحيح بالدقائق للصلاة: 0 فجر، 1 شروق، 2 ظهر، 3 عصر، 4 مغرب، 5 عشاء */
     fun totalAdjust(index: Int): Int = minuteAdjust + when (index) {
         0 -> adjFajr
         1 -> adjSunrise
@@ -491,7 +466,6 @@ class AppState(ctx: Context) {
         minuteAdjust = 0; adjFajr = 0; adjSunrise = 0; adjDhuhr = 0; adjAsr = 0; adjMaghrib = 0; adjIsha = 0
     }
 
-    // ---- المسبحة (تُحفظ لتبقى بعد إغلاق التطبيق) ----
     var tasbihIndex by PersistedInt(sp, "tasbih_index", 0, 0..1000)
     var tasbihCount by PersistedInt(sp, "tasbih_count", 0, 0..Int.MAX_VALUE)
     var tasbihTarget by PersistedInt(sp, "tasbih_target", 33, 0..100000)
@@ -518,7 +492,6 @@ class AppState(ctx: Context) {
         if (index in customPhrases.indices) { customPhrases.removeAt(index); saveCustomPhrases() }
     }
 
-    // ---- المفضلة والصفحات المقروءة والسور المحفوظة ----
     val bookmarks = mutableStateListOf<Int>().apply {
         addAll((sp.getStringSet("bookmarks", emptySet()) ?: emptySet()).mapNotNull { it.toIntOrNull() }.sorted())
     }
@@ -541,7 +514,6 @@ class AppState(ctx: Context) {
         sp.edit().putStringSet("memorized_surahs", memorizedSurahs.map { it.toString() }.toSet()).apply()
     }
 
-    // ---- الورد اليومي (صفحات مختلفة في اليوم) + سلسلة الأيام المتتالية ----
     private fun dayKey(offsetDays: Int = 0): String {
         val c = Calendar.getInstance()
         c.add(Calendar.DAY_OF_YEAR, offsetDays)
@@ -580,7 +552,6 @@ class AppState(ctx: Context) {
 
     fun khatmaPercent(): Int = ((readPages.size * 100) / 604).coerceIn(0, 100)
 
-    // ---- تقدّم الأذكار اليومي (يُصفَّر تلقائياً كل يوم جديد) ----
     private val adhkarLeft = mutableStateMapOf<String, Int>().apply {
         if (sp.getString("adhkar_date", "") == dayKey()) {
             sp.all.forEach { (k, v) -> if (k.startsWith("ad_") && v is Int) put(k.removePrefix("ad_"), v) }
