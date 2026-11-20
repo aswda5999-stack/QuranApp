@@ -468,7 +468,7 @@ fun QuranIndexAndReaderScreen(
                         fontFamily = titleFont
                     )
                     Text(
-                        text = "آخر قراءة: صفحة $lastReadPage • المفضلة: ${favorites.size}",
+                        text = "آخر قراءة: صفحة $currentPage • المفضلة: ${favorites.size}",
                         color = RoyalPalette.GoldHighlight,
                         fontSize = 12.sp,
                         fontFamily = indexFont
@@ -477,7 +477,7 @@ fun QuranIndexAndReaderScreen(
 
                 Button(
                     onClick = {
-                        currentPage = lastReadPage
+                        currentPage = currentPage
                         readerMode = true
                     },
                     colors = ButtonDefaults.buttonColors(
