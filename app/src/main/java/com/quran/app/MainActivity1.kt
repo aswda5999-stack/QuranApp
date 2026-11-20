@@ -4,6 +4,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.quran.app.presentation.AppViewModel
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -159,8 +161,8 @@ enum class BottomNavTab(val route: String, val label: String) {
     HOME("home", "الرئيسية"),
     QURAN("quran_reader", "المصحف"),
     AUDIO("audio", "الصوتيات"),
-    FOLLOW("follow", "تابعنا"),
-    SHARE("share", "مشاركة")
+    ADHKAR("adhkar", "الأذكار"),
+    SETTINGS("settings", "الإعدادات")
 }
 
 @Composable
@@ -198,8 +200,8 @@ fun GlobalBottomNavigationBar(
                     BottomNavTab.HOME -> currentRoute == "home"
                     BottomNavTab.QURAN -> currentRoute == "quran_index" || currentRoute == "quran_reader"
                     BottomNavTab.AUDIO -> currentRoute == "audio"
-                    BottomNavTab.FOLLOW -> false
-                    BottomNavTab.SHARE -> false
+                    BottomNavTab.ADHKAR -> currentRoute == "adhkar"
+                    BottomNavTab.SETTINGS -> currentRoute == "settings"
                 }
 
                 val itemBg = if (isSelected) activePillBg else Color.Transparent
@@ -277,7 +279,7 @@ private fun NavTabGlyph(tab: BottomNavTab, tint: Color, isSelected: Boolean) {
                 drawRoundRect(tint, Offset(w * 0.14f, h * 0.5f), androidx.compose.ui.geometry.Size(w * 0.18f, h * 0.32f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f, 3f))
                 drawRoundRect(tint, Offset(w * 0.68f, h * 0.5f), androidx.compose.ui.geometry.Size(w * 0.18f, h * 0.32f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f, 3f))
             }
-            BottomNavTab.FOLLOW -> {
+            BottomNavTab.ADHKAR -> {
                 val bell = Path().apply {
                     moveTo(w * 0.24f, h * 0.68f)
                     lineTo(w * 0.76f, h * 0.68f)
@@ -290,15 +292,18 @@ private fun NavTabGlyph(tab: BottomNavTab, tint: Color, isSelected: Boolean) {
                 drawPath(bell, color = tint, style = stroke)
                 drawCircle(color = tint, radius = w * 0.08f, center = Offset(w * 0.5f, h * 0.78f))
             }
-            BottomNavTab.SHARE -> {
-                val pTop = Offset(w * 0.72f, h * 0.24f)
-                val pMid = Offset(w * 0.26f, h * 0.50f)
-                val pBot = Offset(w * 0.72f, h * 0.76f)
-                drawLine(tint, pMid, pTop, strokeWidth = stroke.width, cap = StrokeCap.Round)
-                drawLine(tint, pMid, pBot, strokeWidth = stroke.width, cap = StrokeCap.Round)
-                drawCircle(color = tint, radius = w * 0.11f, center = pTop)
-                drawCircle(color = tint, radius = w * 0.11f, center = pMid)
-                drawCircle(color = tint, radius = w * 0.11f, center = pBot)
+            BottomNavTab.SETTINGS -> {
+                val pTop = Offset(w * 0.5f, h * 0.5f)
+                drawCircle(tint, radius = w * 0.30f, center = pTop, style = stroke)
+                drawCircle(tint, radius = w * 0.10f, center = pTop)
+                for (i in 0..7) {
+                    val a = i * (PI / 4.0)
+                    val x1 = w * 0.5f + (w * 0.30f * cos(a)).toFloat()
+                    val y1 = h * 0.5f + (h * 0.30f * sin(a)).toFloat()
+                    val x2 = w * 0.5f + (w * 0.42f * cos(a)).toFloat()
+                    val y2 = h * 0.5f + (h * 0.42f * sin(a)).toFloat()
+                    drawLine(tint, Offset(x1, y1), Offset(x2, y2), strokeWidth = stroke.width, cap = StrokeCap.Round)
+                }
             }
         }
     }
@@ -310,14 +315,16 @@ class MainActivity : ComponentActivity() {
         VoiceAdhkarScheduler.ensureChannel(this)
 
         setContent {
-            var isDarkTheme by remember { mutableStateOf(false) }
-            var currentRoute by remember { mutableStateOf("home") }
-            var lastReadPage by remember { mutableIntStateOf(1) }
-            var startReaderDirectly by remember { mutableStateOf(false) }
-            var favorites by remember { mutableStateOf(setOf(1, 18, 67, 112)) }
+            val appState: AppViewModel = viewModel()
+            var isDarkTheme by appState.isDarkTheme
+            var currentRoute by appState.currentRoute
+            var lastReadPage by appState.lastReadPage
+            var startReaderDirectly by appState.startReaderDirectly
+            var openFavoritesTab by remember { mutableStateOf(false) }
+            var favorites by appState.favorites
             val context = LocalContext.current
-            var globalSearchQuery by remember { mutableStateOf("") }
-            var qiblaIsolated by remember { mutableStateOf(false) }
+            var globalSearchQuery by appState.globalSearchQuery
+            var qiblaIsolated by appState.qiblaIsolated
             var showFollowDialog by remember { mutableStateOf(false) }
 
             val dailyVerses = remember {
@@ -362,21 +369,13 @@ class MainActivity : ComponentActivity() {
                                                 currentRoute = "home"
                                             }
                                             "quran_reader" -> {
+                                                openFavoritesTab = false
                                                 startReaderDirectly = true
                                                 currentRoute = "quran_reader"
                                             }
                                             "audio" -> currentRoute = "audio"
-                                            "follow" -> {
-                                                showFollowDialog = true
-                                            }
-                                            "share" -> {
-                                                val shareText = "تطبيق القرآن الكريم — المصحف الشريف، التلاوات الصوتية، الأذكار، ومواقيت الصلاة"
-                                                val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                                    putExtra(Intent.EXTRA_TEXT, shareText)
-                                                    type = "text/plain"
-                                                }
-                                                context.startActivity(Intent.createChooser(sendIntent, "مشاركة التطبيق"))
-                                            }
+                                            "adhkar" -> currentRoute = "adhkar"
+                                            "settings" -> currentRoute = "settings"
                                         }
                                     }
                                 )
@@ -414,12 +413,14 @@ class MainActivity : ComponentActivity() {
                                         onOpenAdhkar = { currentRoute = "adhkar" },
                                         onOpenFavorites = {
                                             startReaderDirectly = false
+                                            openFavoritesTab = true
                                             currentRoute = "quran_index"
                                         },
                                         onOpenSettings = { currentRoute = "settings" },
-                                        onToggleDarkTheme = { isDarkTheme = !isDarkTheme },
+                                        onOpenKhatma = { currentRoute = "khatma" },
+                                        onToggleDarkTheme = { appState.toggleDarkTheme() },
                                         onSelectPageFromSearch = { page ->
-                                            lastReadPage = page.coerceIn(1, 604)
+                                            appState.setLastReadPage(page)
                                             startReaderDirectly = true
                                             currentRoute = "quran_reader"
                                         }
@@ -428,15 +429,16 @@ class MainActivity : ComponentActivity() {
                                     "quran_index", "quran_reader" -> QuranIndexAndReaderScreen(
                                         initialPage = lastReadPage,
                                         startDirectlyInReader = startReaderDirectly || currentRoute == "quran_reader",
+                                        initialTab = if (openFavoritesTab && currentRoute == "quran_index") 2 else 0,
                                         favorites = favorites,
                                         isDarkTheme = isDarkTheme,
                                         searchQuery = globalSearchQuery,
                                         onSearchQueryChange = { globalSearchQuery = it },
                                         onToggleFavorite = { page ->
-                                            favorites = if (favorites.contains(page)) favorites - page else favorites + page
+                                            appState.toggleFavorite(page)
                                         },
-                                        onToggleDarkTheme = { isDarkTheme = !isDarkTheme },
-                                        onPageChanged = { newPage -> lastReadPage = newPage.coerceIn(1, 604) },
+                                        onToggleDarkTheme = { appState.toggleDarkTheme() },
+                                        onPageChanged = { newPage -> appState.setLastReadPage(newPage) },
                                         onOpenSettings = { currentRoute = "settings" },
                                         onBackHome = { currentRoute = "home" }
                                     )
@@ -463,9 +465,18 @@ class MainActivity : ComponentActivity() {
                                         onBackHome = { currentRoute = "home" }
                                     )
 
+                                    "khatma" -> com.quran.app.presentation.KhatmaScreen(
+                                        lastReadPage = lastReadPage,
+                                        isDarkTheme = isDarkTheme,
+                                        onOpenReader = {
+                                            startReaderDirectly = true
+                                            currentRoute = "quran_reader"
+                                        }
+                                    )
+
                                     "settings" -> SettingsAndVoiceAdhkarScreen(
                                         isDarkTheme = isDarkTheme,
-                                        onToggleDarkTheme = { isDarkTheme = it },
+                                        onToggleDarkTheme = { appState.setDarkTheme(it) },
                                         searchQuery = globalSearchQuery,
                                         onSearchQueryChange = { globalSearchQuery = it },
                                         onBackHome = { currentRoute = "home" }

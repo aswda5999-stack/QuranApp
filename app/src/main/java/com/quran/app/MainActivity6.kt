@@ -39,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.quran.app.data.AppPreferencesRepository
 
 data class EssentialDhikr(
     val id: Int,
@@ -71,7 +72,12 @@ fun EssentialAdhkarScreen(
         )
     }
 
-    val counts = remember { mutableStateMapOf<Int, Int>() }
+    val preferences = remember(context) { AppPreferencesRepository(context) }
+    val counts = remember {
+        mutableStateMapOf<Int, Int>().apply {
+            essentialList.forEach { put(it.id, preferences.dhikrCount(it.id)) }
+        }
+    }
     var lastActionMessage by remember { mutableStateOf("اضغط على مربع العداد لزيادة الذكر") }
 
     val screenBg = if (isDarkTheme) RoyalPalette.EmeraldDeep else RoyalPalette.CreamBackground
@@ -136,7 +142,11 @@ fun EssentialAdhkarScreen(
                         )
                     }
                     OutlinedButton(
-                        onClick = { counts.clear(); lastActionMessage = "تم تصفير جميع العدادات" },
+                        onClick = {
+                            counts.clear()
+                            preferences.resetDhikrCounts(essentialList.map { it.id })
+                            lastActionMessage = "تم تصفير جميع العدادات"
+                        },
                         border = BorderStroke(1.dp, RoyalPalette.GoldHighlight),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                     ) {
@@ -199,8 +209,9 @@ fun EssentialAdhkarScreen(
                                 .weight(1.4f)
                                 .clip(RoundedCornerShape(14.dp))
                                 .clickable {
-                                    val next = currentCount + 1
+                                    val next = (currentCount + 1).coerceAtMost(dhikr.target)
                                     counts[dhikr.id] = next
+                                    preferences.saveDhikrCount(dhikr.id, next)
                                     lastActionMessage = if (next >= dhikr.target) "أتممت ${dhikr.title}" else "تم تسجيل ذكر ($next / ${dhikr.target})"
                                 },
                             shape = RoundedCornerShape(14.dp),

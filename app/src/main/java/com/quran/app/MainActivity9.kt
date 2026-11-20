@@ -15,6 +15,7 @@ import android.hardware.SensorManager
 import android.os.Build
 import android.os.SystemClock
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import androidx.compose.ui.text.font.FontFamily
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -228,12 +229,47 @@ class VoiceAdhkarReceiver : BroadcastReceiver() {
         } catch (_: SecurityException) {
         }
 
-        var tts: TextToSpeech? = null
-        tts = TextToSpeech(context.applicationContext) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                tts?.language = Locale("ar")
-                tts?.speak(phrase, TextToSpeech.QUEUE_FLUSH, null, "dhikr_utterance")
+        val pendingResult = goAsync()
+        var speech: TextToSpeech? = null
+        speech = TextToSpeech(context.applicationContext) { status ->
+            val engine = speech
+            if (engine == null || status != TextToSpeech.SUCCESS) {
+                engine?.shutdown()
+                pendingResult.finish()
+                return@TextToSpeech
             }
+            val languageStatus = engine.setLanguage(Locale("ar"))
+            if (languageStatus == TextToSpeech.LANG_MISSING_DATA ||
+                languageStatus == TextToSpeech.LANG_NOT_SUPPORTED
+            ) {
+                engine.shutdown()
+                pendingResult.finish()
+                return@TextToSpeech
+            }
+            engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) = Unit
+                override fun onDone(utteranceId: String?) {
+                    engine.shutdown()
+                    pendingResult.finish()
+                }
+                override fun onError(utteranceId: String?) {
+                    engine.shutdown()
+                    pendingResult.finish()
+                }
+            })
+            engine.speak(phrase, TextToSpeech.QUEUE_FLUSH, null, "dhikr_utterance")
         }
+    }
+}
+
+class BootReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent?) {
+        if (intent?.action != Intent.ACTION_BOOT_COMPLETED) return
+        val prefs = context.getSharedPreferences(VoiceAdhkarScheduler.PREFS_NAME, Context.MODE_PRIVATE)
+        if (!prefs.getBoolean(VoiceAdhkarScheduler.KEY_ENABLED, false)) return
+        val interval = prefs.getInt(VoiceAdhkarScheduler.KEY_INTERVAL_MIN, 60)
+        val phrase = prefs.getString(VoiceAdhkarScheduler.KEY_PHRASE, "سبحان الله") ?: "سبحان الله"
+        val lockScreen = prefs.getBoolean(VoiceAdhkarScheduler.KEY_LOCK_SCREEN, true)
+        VoiceAdhkarScheduler.schedule(context, interval, phrase, lockScreen)
     }
 }

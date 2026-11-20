@@ -74,6 +74,7 @@ data class QuranIndexEntry(
 fun QuranIndexAndReaderScreen(
     initialPage: Int,
     startDirectlyInReader: Boolean = false,
+    initialTab: Int = 0,
     favorites: Set<Int>,
     isDarkTheme: Boolean,
     searchQuery: String,
@@ -89,7 +90,7 @@ fun QuranIndexAndReaderScreen(
     val titleFont = remember(context) { CustomFontLoader.homeTitleFont(context) }
 
     var readerMode by remember(startDirectlyInReader) { mutableStateOf(startDirectlyInReader) }
-    var selectedTab by remember { mutableIntStateOf(0) } // 0: السور، 1: الأجزاء، 2: المفضلة
+    var selectedTab by remember(startDirectlyInReader, initialTab) { mutableIntStateOf(initialTab.coerceIn(0, 2)) } // 0: السور، 1: الأجزاء، 2: المفضلة
     var currentPage by remember(initialPage) { mutableIntStateOf(initialPage.coerceIn(1, 604)) }
     var hideMargins by remember { mutableStateOf(false) }
 

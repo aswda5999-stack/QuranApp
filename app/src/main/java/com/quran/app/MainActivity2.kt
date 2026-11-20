@@ -22,6 +22,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -71,6 +79,7 @@ fun HomeScreen(
     onOpenAdhkar: () -> Unit,
     onOpenFavorites: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenKhatma: () -> Unit,
     onToggleDarkTheme: () -> Unit,
     onSelectPageFromSearch: (Int) -> Unit
 ) {
@@ -103,14 +112,14 @@ fun HomeScreen(
 
     val quickActions = remember {
         listOf(
-            HomeActionItem("quran", "القرآن", "الفهرس والمصحف", Icons.Filled.Search),
-            HomeActionItem("audio", "الصوتيات", "تلاوات القراء", Icons.Filled.Search),
-            HomeActionItem("adhan", "المؤذن", "مواقيت الصلاة", Icons.Filled.Search),
-            HomeActionItem("qibla", "القبلة", "اتجاه الكعبة", Icons.Filled.Search),
-            HomeActionItem("adhkar", "الأذكار", "أذكار ومسبحة", Icons.Filled.Search),
-            HomeActionItem("favorites", "المفضلة", "صفحات محفوظة", Icons.Filled.Search),
-            HomeActionItem("khatma", "الختمة", "متابعة الورد", Icons.Filled.Search),
-            HomeActionItem("settings", "الإعدادات", "الخط والمظهر", Icons.Filled.Search)
+            HomeActionItem("quran", "القرآن", "الفهرس والمصحف", Icons.Filled.MenuBook),
+            HomeActionItem("audio", "الصوتيات", "تلاوات القراء", Icons.Filled.Headphones),
+            HomeActionItem("adhan", "المؤذن", "مواقيت الصلاة", Icons.Filled.Notifications),
+            HomeActionItem("qibla", "القبلة", "اتجاه الكعبة", Icons.Filled.Explore),
+            HomeActionItem("adhkar", "الأذكار", "أذكار ومسبحة", Icons.Filled.Favorite),
+            HomeActionItem("favorites", "المفضلة", "صفحات محفوظة", Icons.Filled.Bookmark),
+            HomeActionItem("khatma", "الختمة", "متابعة الورد", Icons.Filled.AutoStories),
+            HomeActionItem("settings", "الإعدادات", "الخط والمظهر", Icons.Filled.Settings)
         )
     }
 
@@ -245,7 +254,7 @@ fun HomeScreen(
                                     Text(
                                         text = "سورة $surahName",
                                         color = verseTitleColor,
-                                        fontSize = 14.sp,
+                                        fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
                                         fontFamily = indexFont
                                     )
@@ -415,7 +424,7 @@ fun HomeScreen(
                                     "qibla" -> onOpenQibla()
                                     "adhkar" -> onOpenAdhkar()
                                     "favorites" -> onOpenFavorites()
-                                    "khatma" -> onContinueLastRead()
+                                    "khatma" -> onOpenKhatma()
                                     "settings" -> onOpenSettings()
                                 }
                             },
@@ -427,26 +436,26 @@ fun HomeScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 14.dp),
+                                .padding(horizontal = 9.dp, vertical = 10.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
                             Surface(
-                                modifier = Modifier.size(38.dp),
+                                modifier = Modifier.size(30.dp),
                                 shape = CircleShape,
                                 color = RoyalPalette.GoldRoyal.copy(alpha = 0.16f),
                                 border = BorderStroke(1.dp, RoyalPalette.GoldHighlight.copy(alpha = 0.7f))
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Text(
-                                        text = "✦",
-                                        color = RoyalPalette.GoldHighlight,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold
+                                    Icon(
+                                        imageVector = action.icon,
+                                        contentDescription = action.title,
+                                        tint = RoyalPalette.GoldHighlight,
+                                        modifier = Modifier.size(17.dp)
                                     )
                                 }
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(5.dp))
                             Text(
                                 text = action.title,
                                 color = RoyalPalette.CreamText,

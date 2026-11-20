@@ -1,6 +1,7 @@
 package com.quran.app
 
 import android.media.MediaPlayer
+import android.media.AudioAttributes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,6 +18,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
@@ -37,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.quran.app.data.AppPreferencesRepository
 
 @Composable
 fun AudioRecitersScreen(
@@ -75,9 +79,11 @@ fun AudioRecitersScreen(
         )
     }
 
-    var reciterIndex by remember { mutableIntStateOf(0) }
-    var selectedSurahIndex by remember { mutableIntStateOf(0) }
+    val preferences = remember(context) { AppPreferencesRepository(context) }
+    var reciterIndex by remember { mutableIntStateOf(preferences.audioReciterIndex().coerceIn(0, reciters.lastIndex)) }
+    var selectedSurahIndex by remember { mutableIntStateOf(preferences.audioSurahIndex().coerceIn(0, surahTracks.lastIndex)) }
     var isPlaying by remember { mutableStateOf(false) }
+    var showReciterDialog by remember { mutableStateOf(false) }
     var statusNote by remember { mutableStateOf("اختر السورة للتشغيل أو بدّل القارئ") }
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
 
@@ -101,6 +107,18 @@ fun AudioRecitersScreen(
     fun startOrToggleStream(recIdx: Int, surIdx: Int) {
         val reciter = reciters[recIdx]
         val (surahName, code) = surahTracks[surIdx]
+        // MP3Quran hosts use a different server/folder for each reciter.
+        val reciterFolder = when (reciter) {
+            "مشاري راشد العفاسي" -> "server8.mp3quran.net/afs"
+            "ماهر المعيقلي" -> "server12.mp3quran.net/maher"
+            "عبد الباسط عبد الصمد" -> "server7.mp3quran.net/basit"
+            "ياسر الدوسري" -> "server11.mp3quran.net/yasser"
+            "محمود خليل الحصري" -> "server13.mp3quran.net/husr"
+            "ناصر القطامي" -> "server6.mp3quran.net/qtm"
+            "إسلام صبحي" -> "server10.mp3quran.net/islam"
+            "سعد الغامدي" -> "server12.mp3quran.net/s_gmd"
+            else -> "server8.mp3quran.net/afs"
+        }
         if (reciterIndex == recIdx && selectedSurahIndex == surIdx && isPlaying) {
             releasePlayer()
             statusNote = "تم إيقاف التشغيل • $reciter"
@@ -109,10 +127,19 @@ fun AudioRecitersScreen(
         releasePlayer()
         reciterIndex = recIdx
         selectedSurahIndex = surIdx
+        preferences.saveAudioReciterIndex(recIdx)
+        preferences.saveAudioSurahIndex(surIdx)
         statusNote = "جاري تجهيز بث $surahName بصوت $reciter..."
         try {
             val mp = MediaPlayer().apply {
-                setDataSource("https://server8.mp3quran.net/afs/$code.mp3")
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                setWakeMode(context, android.os.PowerManager.PARTIAL_WAKE_LOCK)
+                setDataSource("https://$reciterFolder/$code.mp3")
                 setOnPreparedListener {
                     start()
                     isPlaying = true
@@ -122,9 +149,10 @@ fun AudioRecitersScreen(
                     isPlaying = false
                     statusNote = "اكتملت تلاوة $surahName"
                 }
-                setOnErrorListener { _, _, _ ->
+                setOnErrorListener { player, _, _ ->
                     isPlaying = false
-                    statusNote = "تعذر الاتصال بالبث المباشر (تحقق من الإنترنت)"
+                    statusNote = "تعذر تشغيل هذه التلاوة. تحقق من الإنترنت أو جرّب قارئاً آخر."
+                    try { player.reset() } catch (_: Exception) {}
                     true
                 }
                 prepareAsync()
@@ -133,6 +161,34 @@ fun AudioRecitersScreen(
         } catch (_: Exception) {
             statusNote = "تعذر تهيئة المشغل الصوتي"
         }
+    }
+
+    if (showReciterDialog) {
+        AlertDialog(
+            onDismissRequest = { showReciterDialog = false },
+            title = { Text("اختر القارئ") },
+            text = {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    itemsIndexed(reciters) { index, name ->
+                        TextButton(
+                            onClick = {
+                                showReciterDialog = false
+                                startOrToggleStream(index, selectedSurahIndex)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = if (index == reciterIndex) "✓ $name" else name,
+                                color = if (isDarkTheme) RoyalPalette.GoldHighlight else RoyalPalette.EmeraldRoyal
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showReciterDialog = false }) { Text("إغلاق") }
+            }
+        )
     }
 
     val screenBg = if (isDarkTheme) RoyalPalette.EmeraldDeep else RoyalPalette.CreamBackground
@@ -197,10 +253,7 @@ fun AudioRecitersScreen(
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Button(
-                        onClick = {
-                            val nextRec = (reciterIndex + 1) % reciters.size
-                            startOrToggleStream(nextRec, selectedSurahIndex)
-                        },
+                        onClick = { showReciterDialog = true },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = RoyalPalette.GoldRoyal,
                             contentColor = RoyalPalette.EmeraldDeep
