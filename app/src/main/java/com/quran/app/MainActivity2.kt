@@ -1,10 +1,17 @@
 package com.quran.app
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.runtime.*
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.SimpleTimeZone
+import java.util.TimeZone
+import kotlin.reflect.KProperty
+import org.json.JSONArray
+import org.json.JSONObject
 
 // ============================================================
 // 1. النماذج والبيانات الأساسية (Surah, Juz, Reciter, GeoLocation)
@@ -245,105 +252,200 @@ object QuranData {
 }
 
 // ============================================================
-// 3. إدارة الحالة المشتركة والتخزين الدائم (AppState)
+// 3. مفوّضات الحفظ الدائم (تحفظ تلقائياً في SharedPreferences وتحدّث الواجهة فوراً)
+// ============================================================
+class PersistedInt(
+    private val sp: SharedPreferences,
+    private val key: String,
+    def: Int,
+    private val range: IntRange? = null
+) {
+    private var v by mutableIntStateOf(sp.getInt(key, def).let { x -> range?.let { x.coerceIn(it) } ?: x })
+    operator fun getValue(thisRef: Any?, p: KProperty<*>): Int = v
+    operator fun setValue(thisRef: Any?, p: KProperty<*>, value: Int) {
+        v = range?.let { value.coerceIn(it) } ?: value
+        sp.edit().putInt(key, v).apply()
+    }
+}
+
+class PersistedLong(private val sp: SharedPreferences, private val key: String, def: Long) {
+    private var v by mutableLongStateOf(sp.getLong(key, def))
+    operator fun getValue(thisRef: Any?, p: KProperty<*>): Long = v
+    operator fun setValue(thisRef: Any?, p: KProperty<*>, value: Long) {
+        v = value
+        sp.edit().putLong(key, v).apply()
+    }
+}
+
+class PersistedBool(private val sp: SharedPreferences, private val key: String, def: Boolean) {
+    private var v by mutableStateOf(sp.getBoolean(key, def))
+    operator fun getValue(thisRef: Any?, p: KProperty<*>): Boolean = v
+    operator fun setValue(thisRef: Any?, p: KProperty<*>, value: Boolean) {
+        v = value
+        sp.edit().putBoolean(key, v).apply()
+    }
+}
+
+class PersistedFloat(
+    private val sp: SharedPreferences,
+    private val key: String,
+    def: Float,
+    private val range: ClosedFloatingPointRange<Float>
+) {
+    private var v by mutableFloatStateOf(sp.getFloat(key, def).coerceIn(range))
+    operator fun getValue(thisRef: Any?, p: KProperty<*>): Float = v
+    operator fun setValue(thisRef: Any?, p: KProperty<*>, value: Float) {
+        v = value.coerceIn(range)
+        sp.edit().putFloat(key, v).apply()
+    }
+}
+
+class PersistedString(private val sp: SharedPreferences, private val key: String, def: String) {
+    private var v by mutableStateOf(sp.getString(key, def) ?: def)
+    operator fun getValue(thisRef: Any?, p: KProperty<*>): String = v
+    operator fun setValue(thisRef: Any?, p: KProperty<*>, value: String) {
+        v = value
+        sp.edit().putString(key, v).apply()
+    }
+}
+
+// ============================================================
+// 4. الساعة المعتمدة في التطبيق + التحية + التاريخ الهجري والميلادي
+// ============================================================
+object AppClock {
+    /** المنطقة الزمنية المعتمدة: من الجهاز (تلقائي) أو إزاحة UTC يدوية */
+    fun zone(st: AppState): TimeZone =
+        if (st.timeMode == 1) SimpleTimeZone(st.manualUtcMin * 60_000, "UTC-MANUAL") else TimeZone.getDefault()
+
+    fun calendar(st: AppState, millis: Long = System.currentTimeMillis()): Calendar =
+        Calendar.getInstance(zone(st)).apply { timeInMillis = millis }
+
+    fun hourDecimal(cal: Calendar): Double =
+        cal.get(Calendar.HOUR_OF_DAY) + cal.get(Calendar.MINUTE) / 60.0 + cal.get(Calendar.SECOND) / 3600.0
+
+    fun greeting(cal: Calendar): String = when (cal.get(Calendar.HOUR_OF_DAY)) {
+        in 4..11 -> "صَبَاحُ الْخَيْرِ"
+        in 12..16 -> "طَابَ يَوْمُكَ"
+        in 17..21 -> "مَسَاءُ الْخَيْرِ"
+        else -> "طَابَتْ لَيْلَتُكَ"
+    }
+
+    fun greetingSub(cal: Calendar): String = when (cal.get(Calendar.HOUR_OF_DAY)) {
+        in 4..11 -> "ابدأ يومك بذكر الله وتلاوة وِردك"
+        in 12..16 -> "نَوَّرَ اللَّهُ يَوْمَكَ بِالْقُرْآنِ وَالذِّكْرِ"
+        in 17..21 -> "اختم يومك بالأذكار وصفحات من القرآن"
+        else -> "لا تنسَ أذكار النوم وقيام الليل"
+    }
+
+    fun formatClock(cal: Calendar, use24h: Boolean): String {
+        val h = cal.get(Calendar.HOUR_OF_DAY)
+        val m = cal.get(Calendar.MINUTE)
+        return if (use24h) String.format(Locale.US, "%02d:%02d", h, m)
+        else {
+            val h12 = when { h == 0 -> 12; h > 12 -> h - 12; else -> h }
+            String.format(Locale.US, "%d:%02d %s", h12, m, if (h >= 12) "م" else "ص")
+        }
+    }
+
+    fun utcLabel(minutes: Int): String {
+        val sign = if (minutes >= 0) "+" else "-"
+        val a = kotlin.math.abs(minutes)
+        return String.format(Locale.US, "UTC%s%02d:%02d", sign, a / 60, a % 60)
+    }
+}
+
+object ArabicDate {
+    val weekdays = listOf("الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت")
+    private val monthsGeneral = listOf(
+        "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
+        "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"
+    )
+    private val monthsLevant = listOf(
+        "كانون الثاني", "شباط", "آذار", "نيسان", "أيار", "حزيران",
+        "تموز", "آب", "أيلول", "تشرين الأول", "تشرين الثاني", "كانون الأول"
+    )
+
+    fun weekday(cal: Calendar): String = weekdays[cal.get(Calendar.DAY_OF_WEEK) - 1]
+
+    fun gregorian(cal: Calendar, style: Int): String {
+        val months = if (style == 1) monthsLevant else monthsGeneral
+        return "${cal.get(Calendar.DAY_OF_MONTH)} ${months[cal.get(Calendar.MONTH)]} ${cal.get(Calendar.YEAR)} م"
+    }
+}
+
+object HijriCalendar {
+    val monthNames = listOf(
+        "محرم", "صفر", "ربيع الأول", "ربيع الآخر", "جمادى الأولى", "جمادى الآخرة",
+        "رجب", "شعبان", "رمضان", "شوال", "ذو القعدة", "ذو الحجة"
+    )
+
+    /** يحوّل التاريخ الميلادي إلى هجري (حساب جدولي) ويعيد Triple(سنة، شهر 1..12، يوم) */
+    fun fromGregorian(y: Int, m: Int, d: Int): Triple<Int, Int, Int> {
+        val a = (14 - m) / 12
+        val yy = y + 4800 - a
+        val mm = m + 12 * a - 3
+        val jd = d + (153 * mm + 2) / 5 + 365 * yy + yy / 4 - yy / 100 + yy / 400 - 32045
+        var l = jd - 1948440 + 10632
+        val n = (l - 1) / 10631
+        l = l - 10631 * n + 354
+        val j = ((10985 - l) / 5316) * ((50 * l) / 17719) + (l / 5670) * ((43 * l) / 15238)
+        l = l - ((30 - j) / 15) * ((17719 * j) / 50) - (j / 16) * ((15238 * j) / 43) + 29
+        val month = (24 * l) / 709
+        val day = l - (709 * month) / 24
+        val year = 30 * n + j - 30
+        return Triple(year, month, day)
+    }
+
+    /** offsetDays: تصحيح يدوي بين -2 و +2 يوم لمطابقة رؤية الهلال في بلدك */
+    fun format(cal: Calendar, offsetDays: Int): String {
+        val c = cal.clone() as Calendar
+        c.add(Calendar.DAY_OF_YEAR, offsetDays)
+        val (y, m, d) = fromGregorian(c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH))
+        return "$d ${monthNames[(m - 1).coerceIn(0, 11)]} $y هـ"
+    }
+}
+
+// ============================================================
+// 5. إدارة الحالة المشتركة والتخزين الدائم (AppState)
 // ============================================================
 class AppState(ctx: Context) {
     private val sp = ctx.applicationContext.getSharedPreferences("quran_app_v3_prefs", Context.MODE_PRIVATE)
 
-    private fun intState(key: String, def: Int) = mutableIntStateOf(sp.getInt(key, def))
-    private fun boolState(key: String, def: Boolean) = mutableStateOf(sp.getBoolean(key, def))
-    private fun strState(key: String, def: String) = mutableStateOf(sp.getString(key, def) ?: def)
+    // ---- القراءة والإنجاز ----
+    var lastPage by PersistedInt(sp, "last_page", 1, 1..604)
+    var dailyGoal by PersistedInt(sp, "daily_goal", 5, 1..60)
+    var streak by PersistedInt(sp, "streak", 0, 0..100000)
+    var totalTasbih by PersistedInt(sp, "total_tasbih", 0, 0..Int.MAX_VALUE)
+    var reciterId by PersistedString(sp, "reciter_id", "afs")
 
-    private var _lastPage by intState("last_page", 1)
-    var lastPage: Int
-        get() = _lastPage
-        set(v) { _lastPage = v.coerceIn(1, 604); sp.edit().putInt("last_page", _lastPage).apply() }
+    // ---- المظهر والقراءة ----
+    var nightMode by PersistedBool(sp, "night_mode", false)
+    var paperWarmth by PersistedBool(sp, "paper_warmth", true)
+    var keepOn by PersistedBool(sp, "keep_on", true)
+    var mushafFontScale by PersistedFloat(sp, "mushaf_font_scale", 1.0f, 0.8f..1.5f)
+    var adhkarFontScale by PersistedFloat(sp, "adhkar_font_scale", 1.0f, 0.8f..1.5f)
+    var tasbihFontScale by PersistedFloat(sp, "tasbih_font_scale", 1.0f, 0.8f..1.6f)
+    var monthStyle by PersistedInt(sp, "month_style", 0, 0..1)     // 0 يناير.. | 1 كانون الثاني..
+    var use24h by PersistedBool(sp, "use_24h", false)
 
-    private var _dailyGoal by intState("daily_goal", 5)
-    var dailyGoal: Int
-        get() = _dailyGoal
-        set(v) { _dailyGoal = v.coerceIn(1, 60); sp.edit().putInt("daily_goal", _dailyGoal).apply() }
+    // ---- الصوت والاهتزاز ----
+    var soundOn by PersistedBool(sp, "sound_on", true)
+    var vibOn by PersistedBool(sp, "vib_on", true)
+    var stageVib by PersistedBool(sp, "stage_vib", true)
 
-    private var _streak by intState("streak", 1)
-    var streak: Int
-        get() = _streak
-        set(v) { _streak = v.coerceAtLeast(0); sp.edit().putInt("streak", _streak).apply() }
+    // ---- التذكيرات ----
+    var dailyReminder by PersistedBool(sp, "daily_reminder", true)
+    var reminderHour by PersistedInt(sp, "reminder_hour", 20, 0..23)
+    var reminderMinute by PersistedInt(sp, "reminder_minute", 0, 0..59)
+    var adhkarAlert by PersistedBool(sp, "adhkar_alert", true)
+    var prayerAlert by PersistedBool(sp, "prayer_alert", true)
 
-    private var _totalTasbih by intState("total_tasbih", 0)
-    var totalTasbih: Int
-        get() = _totalTasbih
-        set(v) { _totalTasbih = v.coerceAtLeast(0); sp.edit().putInt("total_tasbih", _totalTasbih).apply() }
+    // ---- الموقع ----
+    var locationMode by PersistedInt(sp, "location_mode", 1, 0..1)   // 0 تلقائي GPS | 1 يدوي
+    var autoLocRefresh by PersistedBool(sp, "auto_loc_refresh", true)
+    var lastLocFetch by PersistedLong(sp, "last_loc_fetch", 0L)
 
-    private var _reciterId by strState("reciter_id", "afs")
-    var reciterId: String
-        get() = _reciterId
-        set(v) { _reciterId = v; sp.edit().putString("reciter_id", v).apply() }
-
-    // إعدادات المظهر والقراءة
-    private var _nightMode by boolState("night_mode", false)
-    var nightMode: Boolean
-        get() = _nightMode
-        set(v) { _nightMode = v; sp.edit().putBoolean("night_mode", v).apply() }
-
-    private var _paperWarmth by boolState("paper_warmth", true)
-    var paperWarmth: Boolean
-        get() = _paperWarmth
-        set(v) { _paperWarmth = v; sp.edit().putBoolean("paper_warmth", v).apply() }
-
-    private var _keepOn by boolState("keep_on", true)
-    var keepOn: Boolean
-        get() = _keepOn
-        set(v) { _keepOn = v; sp.edit().putBoolean("keep_on", v).apply() }
-
-    private var _mushafFontScale by mutableFloatStateOf(sp.getFloat("mushaf_font_scale", 1.0f))
-    var mushafFontScale: Float
-        get() = _mushafFontScale
-        set(v) { _mushafFontScale = v.coerceIn(0.8f, 1.5f); sp.edit().putFloat("mushaf_font_scale", _mushafFontScale).apply() }
-
-    // إعدادات الصوت والاهتزاز
-    private var _soundOn by boolState("sound_on", true)
-    var soundOn: Boolean
-        get() = _soundOn
-        set(v) { _soundOn = v; sp.edit().putBoolean("sound_on", v).apply() }
-
-    private var _vibOn by boolState("vib_on", true)
-    var vibOn: Boolean
-        get() = _vibOn
-        set(v) { _vibOn = v; sp.edit().putBoolean("vib_on", v).apply() }
-
-    private var _stageVib by boolState("stage_vib", true)
-    var stageVib: Boolean
-        get() = _stageVib
-        set(v) { _stageVib = v; sp.edit().putBoolean("stage_vib", v).apply() }
-
-    // إعدادات التذكيرات
-    private var _dailyReminder by boolState("daily_reminder", true)
-    var dailyReminder: Boolean
-        get() = _dailyReminder
-        set(v) { _dailyReminder = v; sp.edit().putBoolean("daily_reminder", v).apply() }
-
-    private var _reminderHour by intState("reminder_hour", 20)
-    var reminderHour: Int
-        get() = _reminderHour
-        set(v) { _reminderHour = v.coerceIn(0, 23); sp.edit().putInt("reminder_hour", _reminderHour).apply() }
-
-    private var _adhkarAlert by boolState("adhkar_alert", true)
-    var adhkarAlert: Boolean
-        get() = _adhkarAlert
-        set(v) { _adhkarAlert = v; sp.edit().putBoolean("adhkar_alert", v).apply() }
-
-    private var _prayerAlert by boolState("prayer_alert", true)
-    var prayerAlert: Boolean
-        get() = _prayerAlert
-        set(v) { _prayerAlert = v; sp.edit().putBoolean("prayer_alert", v).apply() }
-
-    // إعدادات الموقع وطريقة حساب الصلاة
-    private var _prayerMethod by intState("prayer_method", 0)
-    var prayerMethod: Int
-        get() = _prayerMethod
-        set(v) { _prayerMethod = v; sp.edit().putInt("prayer_method", v).apply() }
-
-    private var _geoName by strState("geo_name", "مكة المكرمة")
+    private var _geoName by mutableStateOf(sp.getString("geo_name", "مكة المكرمة") ?: "مكة المكرمة")
     private var _geoLat by mutableDoubleStateOf(Double.fromBits(sp.getLong("geo_lat", 21.4225.toBits())))
     private var _geoLng by mutableDoubleStateOf(Double.fromBits(sp.getLong("geo_lng", 39.8262.toBits())))
 
@@ -361,7 +463,62 @@ class AppState(ctx: Context) {
             .apply()
     }
 
-    // المفضلة، الصفحات المقروءة، والسور المحفوظة
+    // ---- الوقت والمواقيت ----
+    var timeMode by PersistedInt(sp, "time_mode", 0, 0..1)           // 0 تلقائي من الجهاز | 1 يدوي
+    var manualUtcMin by PersistedInt(sp, "manual_utc_min", 180, -720..840)
+    var prayerMethod by PersistedInt(sp, "prayer_method", 0, 0..7)
+    var asrHanafi by PersistedBool(sp, "asr_hanafi", false)
+    var hijriOffset by PersistedInt(sp, "hijri_offset", 0, -2..2)
+    var minuteAdjust by PersistedInt(sp, "minute_adjust", 0, -60..60)
+    var adjFajr by PersistedInt(sp, "adj_fajr", 0, -30..30)
+    var adjSunrise by PersistedInt(sp, "adj_sunrise", 0, -30..30)
+    var adjDhuhr by PersistedInt(sp, "adj_dhuhr", 0, -30..30)
+    var adjAsr by PersistedInt(sp, "adj_asr", 0, -30..30)
+    var adjMaghrib by PersistedInt(sp, "adj_maghrib", 0, -30..30)
+    var adjIsha by PersistedInt(sp, "adj_isha", 0, -30..30)
+
+    /** مجموع التصحيح بالدقائق للصلاة: 0 فجر، 1 شروق، 2 ظهر، 3 عصر، 4 مغرب، 5 عشاء */
+    fun totalAdjust(index: Int): Int = minuteAdjust + when (index) {
+        0 -> adjFajr
+        1 -> adjSunrise
+        2 -> adjDhuhr
+        3 -> adjAsr
+        4 -> adjMaghrib
+        else -> adjIsha
+    }
+
+    fun resetTimeAdjustments() {
+        minuteAdjust = 0; adjFajr = 0; adjSunrise = 0; adjDhuhr = 0; adjAsr = 0; adjMaghrib = 0; adjIsha = 0
+    }
+
+    // ---- المسبحة (تُحفظ لتبقى بعد إغلاق التطبيق) ----
+    var tasbihIndex by PersistedInt(sp, "tasbih_index", 0, 0..1000)
+    var tasbihCount by PersistedInt(sp, "tasbih_count", 0, 0..Int.MAX_VALUE)
+    var tasbihTarget by PersistedInt(sp, "tasbih_target", 33, 0..100000)
+    var tasbihRounds by PersistedInt(sp, "tasbih_rounds", 0, 0..Int.MAX_VALUE)
+
+    val customPhrases = mutableStateListOf<TasbihPhrase>().apply {
+        runCatching {
+            val arr = JSONArray(sp.getString("custom_tasbih", "[]") ?: "[]")
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                add(TasbihPhrase(o.getString("t"), o.getString("a"), o.getInt("n")))
+            }
+        }
+    }
+
+    private fun saveCustomPhrases() {
+        val arr = JSONArray()
+        customPhrases.forEach { arr.put(JSONObject().put("t", it.title).put("a", it.arabicText).put("n", it.defaultTarget)) }
+        sp.edit().putString("custom_tasbih", arr.toString()).apply()
+    }
+
+    fun addCustomPhrase(p: TasbihPhrase) { customPhrases.add(p); saveCustomPhrases() }
+    fun removeCustomPhrase(index: Int) {
+        if (index in customPhrases.indices) { customPhrases.removeAt(index); saveCustomPhrases() }
+    }
+
+    // ---- المفضلة والصفحات المقروءة والسور المحفوظة ----
     val bookmarks = mutableStateListOf<Int>().apply {
         addAll((sp.getStringSet("bookmarks", emptySet()) ?: emptySet()).mapNotNull { it.toIntOrNull() }.sorted())
     }
@@ -384,12 +541,18 @@ class AppState(ctx: Context) {
         sp.edit().putStringSet("memorized_surahs", memorizedSurahs.map { it.toString() }.toSet()).apply()
     }
 
-    private fun todayKey(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-
-    fun todayPages(): Int {
-        val savedDay = sp.getString("today_date", "")
-        return if (savedDay == todayKey()) sp.getInt("today_count", 0) else 0
+    // ---- الورد اليومي (صفحات مختلفة في اليوم) + سلسلة الأيام المتتالية ----
+    private fun dayKey(offsetDays: Int = 0): String {
+        val c = Calendar.getInstance()
+        c.add(Calendar.DAY_OF_YEAR, offsetDays)
+        return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(c.time)
     }
+
+    private var todayPagesCount by mutableIntStateOf(
+        if (sp.getString("today_date", "") == dayKey()) (sp.getStringSet("today_pages", emptySet())?.size ?: 0) else 0
+    )
+
+    fun todayPages(): Int = todayPagesCount
 
     fun markPageRead(page: Int) {
         lastPage = page
@@ -397,21 +560,63 @@ class AppState(ctx: Context) {
             readPages.add(page)
             sp.edit().putStringSet("read_pages", readPages.map { it.toString() }.toSet()).apply()
         }
-        val today = todayKey()
-        val prevDay = sp.getString("today_date", "")
-        val newCount = if (prevDay == today) sp.getInt("today_count", 0) + 1 else 1
-        sp.edit().putString("today_date", today).putInt("today_count", newCount).apply()
+        val today = dayKey()
+        val set = if (sp.getString("today_date", "") == today)
+            (sp.getStringSet("today_pages", emptySet()) ?: emptySet()).toMutableSet() else mutableSetOf()
+        val isNewDay = sp.getString("today_date", "") != today
+        set.add(page.toString())
+        sp.edit().putString("today_date", today).putStringSet("today_pages", set).apply()
+        todayPagesCount = set.size
+
+        if (isNewDay) {
+            val last = sp.getString("streak_last_day", "")
+            streak = if (last == dayKey(-1)) streak + 1 else 1
+            sp.edit().putString("streak_last_day", today).apply()
+        } else if (streak == 0) {
+            streak = 1
+            sp.edit().putString("streak_last_day", today).apply()
+        }
     }
 
     fun khatmaPercent(): Int = ((readPages.size * 100) / 604).coerceIn(0, 100)
+
+    // ---- تقدّم الأذكار اليومي (يُصفَّر تلقائياً كل يوم جديد) ----
+    private val adhkarLeft = mutableStateMapOf<String, Int>().apply {
+        if (sp.getString("adhkar_date", "") == dayKey()) {
+            sp.all.forEach { (k, v) -> if (k.startsWith("ad_") && v is Int) put(k.removePrefix("ad_"), v) }
+        } else {
+            sp.edit().apply { sp.all.keys.filter { it.startsWith("ad_") }.forEach { remove(it) } }
+                .putString("adhkar_date", dayKey()).apply()
+        }
+    }
+
+    fun adhkarRemaining(id: String, target: Int): Int = adhkarLeft[id] ?: target
+
+    fun adhkarTick(id: String, target: Int): Int {
+        val next = ((adhkarLeft[id] ?: target) - 1).coerceAtLeast(0)
+        adhkarLeft[id] = next
+        sp.edit().putString("adhkar_date", dayKey()).putInt("ad_$id", next).apply()
+        return next
+    }
+
+    fun adhkarReset(items: List<DhikrItem>) {
+        val e = sp.edit()
+        items.forEach { adhkarLeft.remove(it.id); e.remove("ad_${it.id}") }
+        e.apply()
+    }
+
+    fun adhkarResetAll() {
+        adhkarLeft.clear()
+        sp.edit().apply { sp.all.keys.filter { it.startsWith("ad_") }.forEach { remove(it) } }.apply()
+    }
 
     fun resetStats() {
         readPages.clear()
         totalTasbih = 0
         streak = 0
-        sp.edit()
-            .remove("read_pages")
-            .putInt("today_count", 0)
-            .apply()
+        tasbihRounds = 0
+        tasbihCount = 0
+        todayPagesCount = 0
+        sp.edit().remove("read_pages").remove("today_pages").remove("streak_last_day").apply()
     }
 }

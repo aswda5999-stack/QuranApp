@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Calendar
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -50,43 +51,55 @@ fun HomeScreen(nav: Nav) {
     val st = LocalApp.current
     val p = LocalPalette.current
     val fx = LocalFx.current
-    val ctx = LocalContext.current
 
-    val greeting = remember {
-        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        when {
-            hour in 4..11 -> "صَبَاحُ الْخَيْرِ"
-            hour in 12..16 -> "طَابَ يَوْمُكَ"
-            else -> "مَسَاءُ الْخَيْرِ"
+    // تحديث الوقت كل 20 ثانية (التحية والصلاة القادمة والتاريخ)
+    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(20_000L)
+            nowMs = System.currentTimeMillis()
         }
     }
+
+    val cal = AppClock.calendar(st, nowMs)
+    val hour = cal.get(Calendar.HOUR_OF_DAY)
+    val greeting = AppClock.greeting(cal)
+    val hijriText = HijriCalendar.format(cal, st.hijriOffset)
+    val gregText = ArabicDate.gregorian(cal, st.monthStyle)
+    val weekday = ArabicDate.weekday(cal)
+    val next = PrayerCalc.next(st, nowMs)
 
     val lastSurah = remember(st.lastPage) { QuranData.surahForPage(st.lastPage) }
     val lastJuz = remember(st.lastPage) { QuranData.juzForPage(st.lastPage) }
     val pct = st.khatmaPercent()
     val todayRead = st.todayPages()
 
+    // اقتراح الأذكار المناسبة لوقت اليوم
+    val suggestion: Triple<String, Int, ImageVector> = when (hour) {
+        in 4..10 -> Triple("أذكار الصباح", AdhkarTabs.MORNING, Icons.Default.WbSunny)
+        in 11..14 -> Triple("أذكار بعد الصلاة", AdhkarTabs.AFTER_PRAYER, Icons.Default.Mosque)
+        in 15..19 -> Triple("أذكار المساء", AdhkarTabs.EVENING, Icons.Default.NightsStay)
+        else -> Triple("أذكار النوم", AdhkarTabs.SLEEP, Icons.Default.Bedtime)
+    }
+    val suggestionLeft = adhkarCategoryProgress(st, suggestion.second)
+
     LazyColumn(
         contentPadding = PaddingValues(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxSize()
     ) {
-        // 1. الترويسة الملكية الكبيرة مع التحية بالخط العثماني العريض
+        // 1. الترويسة الملكية: التحية + التاريخ الهجري والميلادي + متابعة التلاوة
         item {
             Surface(
                 color = RoyalForest,
-                shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
+                shape = RoundedCornerShape(bottomStart = 34.dp, bottomEnd = 34.dp),
                 border = BorderStroke(1.3.dp, GoldWarm.copy(alpha = 0.65f)),
                 shadowElevation = 10.dp
             ) {
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(RoyalForest, EmeraldVibrant, TealStart)
-                            )
-                        )
+                        .background(Brush.verticalGradient(listOf(RoyalForest, EmeraldVibrant, TealStart)))
                         .statusBarsPadding()
                 ) {
                     IslamicPattern(Modifier.matchParentSize())
@@ -94,7 +107,7 @@ fun HomeScreen(nav: Nav) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 18.dp, vertical = 18.dp)
+                            .padding(horizontal = 18.dp, vertical = 16.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -102,53 +115,65 @@ fun HomeScreen(nav: Nav) {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                // كلمة التحية الكبيرة بالخط العثماني العريض
+                                // التحية بالخط العثماني العريض
                                 Text(
                                     text = greeting,
                                     fontFamily = UthmanicFontFamily,
                                     fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 34.sp,
+                                    fontSize = 38.sp,
                                     color = GoldShine,
-                                    lineHeight = 44.sp
+                                    lineHeight = 52.sp
                                 )
-                                Spacer(Modifier.height(2.dp))
                                 Text(
-                                    text = "نَوَّرَ اللَّهُ يَوْمَكَ بِالْقُرْآنِ وَالذِّكْرِ",
-                                    fontFamily = UthmanicFontFamily,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp,
-                                    color = GoldSoftBg.copy(alpha = 0.92f)
+                                    text = AppClock.greetingSub(cal),
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 13.sp,
+                                    color = GoldSoftBg.copy(alpha = 0.95f)
                                 )
                             }
 
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                IconButton(
-                                    onClick = { fx.click(); nav.push(Screen.Bookmarks) },
-                                    modifier = Modifier
-                                        .size(42.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.White.copy(alpha = 0.14f))
-                                        .border(1.dp, GoldShine.copy(alpha = 0.45f), CircleShape)
-                                ) {
-                                    Icon(Icons.Default.Bookmarks, "المفضلة", tint = GoldShine, modifier = Modifier.size(20.dp))
-                                }
-
-                                IconButton(
-                                    onClick = { fx.click(); nav.push(Screen.Settings) },
-                                    modifier = Modifier
-                                        .size(42.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.White.copy(alpha = 0.14f))
-                                        .border(1.dp, GoldShine.copy(alpha = 0.45f), CircleShape)
-                                ) {
-                                    Icon(Icons.Default.Settings, "الإعدادات", tint = GoldShine, modifier = Modifier.size(20.dp))
-                                }
+                                HeaderIconButton(Icons.Default.Bookmarks, "المفضلة") { fx.click(); nav.push(Screen.Bookmarks) }
+                                HeaderIconButton(Icons.Default.Settings, "الإعدادات") { fx.click(); nav.openSettings(0) }
                             }
                         }
 
-                        Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(14.dp))
 
-                        // بطاقة متابعة التلاوة والختمة السريعة داخل الترويسة
+                        // شريط التاريخ: هجري | ميلادي
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(Color.Black.copy(alpha = 0.24f))
+                                .border(1.dp, GoldShine.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            DateBlock(
+                                icon = Icons.Default.NightsStay,
+                                label = "التاريخ الهجري",
+                                value = hijriText,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Box(
+                                Modifier
+                                    .padding(horizontal = 8.dp)
+                                    .width(1.dp)
+                                    .height(38.dp)
+                                    .background(GoldShine.copy(alpha = 0.4f))
+                            )
+                            DateBlock(
+                                icon = Icons.Default.CalendarMonth,
+                                label = "$weekday • الميلادي",
+                                value = gregText,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+
+                        // بطاقة متابعة التلاوة والختمة السريعة
                         Surface(
                             onClick = { fx.click(); nav.openPage(st.lastPage) },
                             shape = RoundedCornerShape(22.dp),
@@ -168,12 +193,7 @@ fun HomeScreen(nav: Nav) {
                                         .clip(RoundedCornerShape(15.dp))
                                         .background(Brush.linearGradient(listOf(GoldShine, GoldWarm)))
                                 ) {
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.MenuBook,
-                                        null,
-                                        tint = RoyalForest,
-                                        modifier = Modifier.size(26.dp)
-                                    )
+                                    Icon(Icons.AutoMirrored.Filled.MenuBook, null, tint = RoyalForest, modifier = Modifier.size(26.dp))
                                 }
 
                                 Spacer(Modifier.width(12.dp))
@@ -189,21 +209,18 @@ fun HomeScreen(nav: Nav) {
                                     Text(
                                         text = "صفحة ${st.lastPage} • ${lastJuz.name} • الختمة $pct%",
                                         color = GoldSoftBg,
-                                        fontWeight = FontWeight.Bold,
+                                        fontWeight = FontWeight.ExtraBold,
                                         fontSize = 12.sp
                                     )
                                 }
 
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = GoldShine
-                                ) {
+                                Surface(shape = RoundedCornerShape(12.dp), color = GoldShine) {
                                     Text(
                                         text = "أكمل",
                                         color = RoyalForest,
                                         fontWeight = FontWeight.ExtraBold,
-                                        fontSize = 12.sp,
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                        fontSize = 13.sp,
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
                                     )
                                 }
                             }
@@ -213,18 +230,115 @@ fun HomeScreen(nav: Nav) {
             }
         }
 
-        // 2. بطاقة آية اليوم المستقلة (من الملف السادس MainActivity6.kt)
+        // 2. الصلاة القادمة
         item {
-            DailyVerseCard(nav = nav)
+            QCard(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(22.dp),
+                borderColor = GoldWarm.copy(alpha = 0.5f),
+                onClick = { nav.push(Screen.Prayer) }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Brush.linearGradient(listOf(RoyalForest, EmeraldVibrant)))
+                            .border(1.dp, GoldWarm.copy(alpha = 0.7f), RoundedCornerShape(14.dp))
+                    ) {
+                        Icon(Icons.Default.Mosque, null, tint = GoldShine, modifier = Modifier.size(24.dp))
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("الصلاة القادمة: ${next.name}", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = p.ink)
+                        Text(
+                            "بعد ${PrayerCalc.remainingWords(next.millis - nowMs)} • ${st.geo.name}",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = p.muted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Text(
+                        PrayerCalc.formatMillis(st, next.millis),
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 18.sp,
+                        color = EmeraldVibrant
+                    )
+                }
+            }
         }
 
-        // 3. بطاقة شريط التقدم والورد اليومي
+        // 3. إحصائيات سريعة
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                HomeStat("${st.streak}", "أيام متتالية", Icons.Default.LocalFireDepartment, GoldWarm, Modifier.weight(1f))
+                HomeStat("$todayRead/${st.dailyGoal}", "صفحات اليوم", Icons.Default.AutoStories, EmeraldVibrant, Modifier.weight(1f))
+                HomeStat("$pct%", "إنجاز الختمة", Icons.Default.WorkspacePremium, TurquoiseAccent, Modifier.weight(1f))
+            }
+        }
+
+        // 4. أذكار مناسبة لهذا الوقت
+        item {
+            QCard(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(22.dp),
+                borderColor = EmeraldVibrant.copy(alpha = 0.5f),
+                onClick = { nav.openAdhkar(suggestion.second) }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(EmeraldVibrant.copy(alpha = 0.14f))
+                    ) {
+                        Icon(suggestion.third, null, tint = EmeraldVibrant, modifier = Modifier.size(24.dp))
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("حان وقت ${suggestion.first}", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = p.ink)
+                        Text(
+                            if (suggestionLeft.second > 0 && suggestionLeft.first == suggestionLeft.second) "أتممتها اليوم ✓ تقبّل الله منك"
+                            else "أنجزت ${suggestionLeft.first} من ${suggestionLeft.second} اليوم",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = p.muted
+                        )
+                    }
+                    Icon(Icons.Default.ChevronLeft, null, tint = p.muted)
+                }
+            }
+        }
+
+        // 5. آية اليوم
+        item { DailyVerseCard(nav = nav) }
+
+        // 6. الورد اليومي
         item {
             QCard(
                 modifier = Modifier.padding(horizontal = 16.dp),
                 shape = RoundedCornerShape(22.dp),
                 borderColor = GoldWarm.copy(alpha = 0.4f),
-                onClick = { nav.push(Screen.Hifz) }
+                onClick = { nav.openPage(st.lastPage) }
             ) {
                 Column(Modifier.padding(16.dp)) {
                     Row(
@@ -235,12 +349,12 @@ fun HomeScreen(nav: Nav) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.AutoGraph, null, tint = TurquoiseAccent, modifier = Modifier.size(20.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("الورد اليومي والختمة", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = p.ink)
+                            Text("الورد اليومي والختمة", fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = p.ink)
                         }
                         Text(
-                            "$todayRead / ${st.dailyGoal} صفحات اليوم",
+                            "$todayRead / ${st.dailyGoal} صفحات",
                             fontWeight = FontWeight.ExtraBold,
-                            fontSize = 12.sp,
+                            fontSize = 12.5.sp,
                             color = EmeraldVibrant
                         )
                     }
@@ -258,7 +372,7 @@ fun HomeScreen(nav: Nav) {
             }
         }
 
-        // 4. شبكة الوصول السريع المتوازنة لجميع أقسام التطبيق
+        // 7. شبكة أقسام التطبيق
         item {
             Column(
                 modifier = Modifier.padding(horizontal = 16.dp),
@@ -267,59 +381,88 @@ fun HomeScreen(nav: Nav) {
                 SectionTitle("أقسام التطبيق")
 
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    QuickTile(
-                        title = "فهرس السور",
-                        subtitle = "114 سورة • 30 جزءاً",
-                        icon = Icons.AutoMirrored.Filled.MenuBook,
-                        accent = EmeraldVibrant,
-                        modifier = Modifier.weight(1f)
-                    ) { nav.indexTab = 0; nav.push(Screen.Index) }
-
-                    QuickTile(
-                        title = "المكتبة الصوتية",
-                        subtitle = "${QuranData.reciters.size} قارئاً • بدون نت",
-                        icon = Icons.Default.Headphones,
-                        accent = TurquoiseAccent,
-                        modifier = Modifier.weight(1f)
-                    ) { nav.push(Screen.Audio) }
+                    QuickTile("فهرس السور", "114 سورة • 30 جزءاً", Icons.AutoMirrored.Filled.MenuBook, EmeraldVibrant, Modifier.weight(1f)) {
+                        nav.indexTab = 0; nav.push(Screen.Index)
+                    }
+                    QuickTile("المكتبة الصوتية", "${QuranData.reciters.size} قارئاً • بدون نت", Icons.Default.Headphones, TurquoiseAccent, Modifier.weight(1f)) {
+                        nav.push(Screen.Audio)
+                    }
                 }
-
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    QuickTile(
-                        title = "مواقيت الصلاة",
-                        subtitle = "15 مؤذناً • القبلة",
-                        icon = Icons.Default.Mosque,
-                        accent = GoldWarm,
-                        modifier = Modifier.weight(1f)
-                    ) { nav.push(Screen.Prayer) }
-
-                    QuickTile(
-                        title = "الأذكار والمسبحة",
-                        subtitle = "الصباح • المساء • النوم",
-                        icon = Icons.Default.Spa,
-                        accent = Color(0xFF0F766E),
-                        modifier = Modifier.weight(1f)
-                    ) { nav.tasbihTab = 1; nav.push(Screen.Tasbih) }
+                    QuickTile("مواقيت الصلاة", "الأذان • القبلة", Icons.Default.Mosque, GoldWarm, Modifier.weight(1f)) {
+                        nav.push(Screen.Prayer)
+                    }
+                    QuickTile("الأذكار", "صباح • مساء • نوم • وأكثر", Icons.Default.AutoAwesome, Color(0xFF0F766E), Modifier.weight(1f)) {
+                        nav.openAdhkar(AdhkarTabs.MORNING)
+                    }
                 }
-
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    QuickTile(
-                        title = "مركز الحفظ",
-                        subtitle = "اختبارات • سجل السور",
-                        icon = Icons.Default.Psychology,
-                        accent = RoyalForest,
-                        modifier = Modifier.weight(1f)
-                    ) { nav.push(Screen.Hifz) }
-
-                    QuickTile(
-                        title = "الإعدادات",
-                        subtitle = "المظهر • الخط • التنبيهات",
-                        icon = Icons.Default.Tune,
-                        accent = Color(0xFF334155),
-                        modifier = Modifier.weight(1f)
-                    ) { nav.push(Screen.Settings) }
+                    QuickTile("المسبحة الإلكترونية", "${st.totalTasbih} تسبيحة", Icons.Default.Spa, Color(0xFF7C3AED), Modifier.weight(1f)) {
+                        nav.push(Screen.Tasbih)
+                    }
+                    QuickTile("مركز الحفظ", "اختبارات • سجل السور", Icons.Default.Psychology, RoyalForest, Modifier.weight(1f)) {
+                        nav.push(Screen.Hifz)
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    QuickTile("العلامات المرجعية", "${st.bookmarks.size} صفحة محفوظة", Icons.Default.Bookmarks, Color(0xFFB45309), Modifier.weight(1f)) {
+                        nav.push(Screen.Bookmarks)
+                    }
+                    QuickTile("الإعدادات", "الموقع • الوقت • المظهر", Icons.Default.Tune, Color(0xFF334155), Modifier.weight(1f)) {
+                        nav.openSettings(0)
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun HeaderIconButton(icon: ImageVector, desc: String, onClick: () -> Unit) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(42.dp)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.14f))
+            .border(1.dp, GoldShine.copy(alpha = 0.45f), CircleShape)
+    ) {
+        Icon(icon, desc, tint = GoldShine, modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun DateBlock(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, tint = GoldShine, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(8.dp))
+        Column {
+            Text(label, color = GoldShine, fontWeight = FontWeight.ExtraBold, fontSize = 10.5.sp, maxLines = 1)
+            Text(value, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 13.5.sp, lineHeight = 18.sp)
+        }
+    }
+}
+
+@Composable
+private fun HomeStat(value: String, label: String, icon: ImageVector, accent: Color, modifier: Modifier = Modifier) {
+    val p = LocalPalette.current
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = p.card,
+        border = BorderStroke(1.dp, p.border),
+        shadowElevation = 2.dp,
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp, horizontal = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(icon, null, tint = accent, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.height(4.dp))
+            Text(value, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, color = p.ink)
+            Text(label, fontWeight = FontWeight.ExtraBold, fontSize = 10.5.sp, color = p.muted)
         }
     }
 }
@@ -347,14 +490,14 @@ private fun QuickTile(
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(42.dp)
+                    .size(44.dp)
                     .clip(RoundedCornerShape(13.dp))
                     .background(accent.copy(alpha = 0.14f))
             ) {
-                Icon(icon, null, tint = accent, modifier = Modifier.size(22.dp))
+                Icon(icon, null, tint = accent, modifier = Modifier.size(23.dp))
             }
             Spacer(Modifier.height(10.dp))
-            Text(title, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = p.ink)
+            Text(title, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = p.ink)
             Spacer(Modifier.height(2.dp))
             Text(subtitle, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = p.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -598,10 +741,9 @@ fun ReaderScreen(nav: Nav) {
         modifier = Modifier
             .fillMaxSize()
             .background(p.paper)
-            .statusBarsPadding()
             .navigationBarsPadding()
     ) {
-        // شريط علوي للمصحف
+        // شريط علوي للمصحف (يمتد لونه الأخضر تحت شريط الحالة)
         Surface(
             color = RoyalForest,
             shadowElevation = 4.dp
@@ -609,6 +751,7 @@ fun ReaderScreen(nav: Nav) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -656,8 +799,10 @@ fun ReaderScreen(nav: Nav) {
         ) { pageIndex ->
             val pageNum = pageIndex + 1
             var pageText by remember(pageNum) { mutableStateOf<String?>(null) }
+            var reloadTick by remember(pageNum) { mutableIntStateOf(0) }
 
-            LaunchedEffect(pageNum) {
+            LaunchedEffect(pageNum, reloadTick) {
+                pageText = null
                 pageText = MushafPageLoader.loadPageText(pageNum)
             }
 
@@ -675,6 +820,26 @@ fun ReaderScreen(nav: Nav) {
                         color = EmeraldVibrant,
                         modifier = Modifier.align(Alignment.Center)
                     )
+                } else if (pageText!!.startsWith("تعذر تحميل")) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = pageText!!,
+                            color = p.muted,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Button(
+                            onClick = { fx.click(); reloadTick += 1 },
+                            colors = ButtonDefaults.buttonColors(containerColor = EmeraldVibrant)
+                        ) {
+                            Text("إعادة المحاولة", fontWeight = FontWeight.ExtraBold, color = Color.White)
+                        }
+                    }
                 } else {
                     Column(
                         modifier = Modifier
