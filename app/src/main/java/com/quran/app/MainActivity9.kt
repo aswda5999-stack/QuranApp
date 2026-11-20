@@ -34,7 +34,7 @@ object CustomFontLoader {
     fun loadFromAssets(context: Context, assetFileName: String): FontFamily {
         cache[assetFileName]?.let { return it }
         return try {
-            val tf = Typeface.createFromAsset(context.assets, "fonts/$assetFileName")
+            val tf = Typeface.createFromAsset(context.assets, assetFileName)
             FontFamily(tf)
         } catch (_: Exception) {
             FontFamily.SansSerif
