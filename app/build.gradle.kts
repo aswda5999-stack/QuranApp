@@ -12,25 +12,16 @@ android {
         applicationId = "com.quran.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 3
-        versionName = "3.0"
+        versionCode = 4
+        versionName = "4.0"
         vectorDrawables {
             useSupportLibrary = true
         }
     }
 
-    signingConfigs {
-        create("persistentDebug") {
-            storeFile = file("release.jks")
-            storePassword = "123456"
-            keyAlias = "quran_key"
-            keyPassword = "123456"
-        }
-    }
 
     buildTypes {
         getByName("debug") {
-            signingConfig = signingConfigs.getByName("persistentDebug")
             isMinifyEnabled = false
         }
     }
@@ -59,6 +50,7 @@ dependencies {
     // أساسيات النظام والأندرويد الحديث
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
     implementation("androidx.activity:activity-compose:1.9.2")
 
     // مكتبة الوسائط والتحكم بالصوت في الخلفية وشريط الإشعارات
