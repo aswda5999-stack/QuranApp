@@ -1,19 +1,40 @@
 package com.quran.app
 
+import android.Manifest
 import android.content.Context
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -29,6 +50,9 @@ fun SettingsAndVoiceAdhkarScreen(
     onBackHome: () -> Unit
 ) {
     val context = LocalContext.current
+    val indexFont = remember(context) { CustomFontLoader.indexFont(context) }
+    val titleFont = remember(context) { CustomFontLoader.homeTitleFont(context) }
+
     val prefs = remember { context.getSharedPreferences(VoiceAdhkarScheduler.PREFS_NAME, Context.MODE_PRIVATE) }
 
     var voiceEnabled by remember { mutableStateOf(prefs.getBoolean(VoiceAdhkarScheduler.KEY_ENABLED, false)) }
@@ -36,218 +60,293 @@ fun SettingsAndVoiceAdhkarScreen(
     var selectedPhrase by remember {
         mutableStateOf(prefs.getString(VoiceAdhkarScheduler.KEY_PHRASE, "سبحان الله") ?: "سبحان الله")
     }
-    var lockScreenNotify by remember { mutableStateOf(prefs.getBoolean(VoiceAdhkarScheduler.KEY_LOCK_SCREEN, true)) }
-    var searchExpanded by remember { mutableStateOf(false) }
+    var lockScreenVisible by remember { mutableStateOf(prefs.getBoolean(VoiceAdhkarScheduler.KEY_LOCK_SCREEN, true)) }
+    var statusBanner by remember {
+        mutableStateOf(if (voiceEnabled) "التنبيه الصوتي مفعّل كل $intervalMinutes دقيقة" else "التنبيه الصوتي متوقف حالياً")
+    }
 
-    val intervals = listOf(5, 10, 15, 30, 60)
-
-    val emeraldBg = if (isDarkTheme) RoyalPalette.EmeraldDeep else RoyalPalette.EmeraldRoyal
-    val cardColor = if (isDarkTheme) RoyalPalette.EmeraldCardDark else RoyalPalette.EmeraldCard
-    val gold = RoyalPalette.GoldRoyal
-    val cream = RoyalPalette.CreamText
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ -> }
 
     fun applyVoiceSchedule(enabled: Boolean, mins: Int, phrase: String, lockScreen: Boolean) {
         if (enabled) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
             VoiceAdhkarScheduler.schedule(context, mins, phrase, lockScreen)
+            statusBanner = "تم جدولة الذكر الصوتي ($phrase) كل $mins دقيقة"
         } else {
             VoiceAdhkarScheduler.cancel(context)
+            statusBanner = "تم إيقاف جدولة الأذكار الصوتية"
         }
     }
 
-    Column(
+    val screenBg = if (isDarkTheme) RoyalPalette.EmeraldDeep else RoyalPalette.CreamBackground
+    val cardBg = if (isDarkTheme) RoyalPalette.EmeraldCardDark else RoyalPalette.EmeraldRoyal
+    val lightCardBg = if (isDarkTheme) RoyalPalette.EmeraldCardDark else Color.White
+    val goldBorder = if (isDarkTheme) RoyalPalette.GoldHighlight else RoyalPalette.GoldRoyal
+    val primaryInk = if (isDarkTheme) RoyalPalette.CreamText else RoyalPalette.InkEmerald
+
+    val intervals = remember { listOf(5, 10, 15, 30, 60) }
+
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(emeraldBg)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .background(screenBg)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(bottom = 16.dp)
     ) {
-        Surface(
-            color = cardColor,
-            shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, gold.copy(alpha = 0.45f)),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(8.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+        item {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = cardBg,
+                border = BorderStroke(1.6.dp, goldBorder)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onBackHome) {
-                            Icon(Icons.Rounded.ArrowForward, contentDescription = "رجوع", tint = gold)
-                        }
-                        Text(
-                            text = "الإعدادات والأذكار الصوتية",
-                            color = cream,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    IconButton(
-                        onClick = {
-                            searchExpanded = !searchExpanded
-                            if (!searchExpanded) onSearchQueryChange("")
-                        }
-                    ) {
-                        Icon(
-                            imageVector = if (searchExpanded) Icons.Rounded.Close else Icons.Rounded.Search,
-                            contentDescription = "بحث",
-                            tint = gold
-                        )
-                    }
-                }
-
-                if (searchExpanded) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = onSearchQueryChange,
-                        singleLine = true,
-                        placeholder = { Text("ابحث في الإعدادات...", color = cream.copy(alpha = 0.6f)) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = cream,
-                            unfocusedTextColor = cream,
-                            focusedBorderColor = gold,
-                            unfocusedBorderColor = gold.copy(alpha = 0.4f)
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 6.dp, vertical = 4.dp)
+                    Text(
+                        text = "الإعدادات والأذكار الصوتية",
+                        color = RoyalPalette.CreamText,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = titleFont
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = statusBanner,
+                        color = RoyalPalette.GoldHighlight,
+                        fontSize = 12.sp,
+                        fontFamily = indexFont
                     )
                 }
             }
         }
 
-        Surface(
-            color = cardColor,
-            shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, gold.copy(alpha = 0.35f)),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("الوضع الليلي", color = cream, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Switch(
-                    checked = isDarkTheme,
-                    onCheckedChange = onToggleDarkTheme,
-                    colors = SwitchDefaults.colors(checkedThumbColor = gold, checkedTrackColor = Color(0xFF1F634B))
-                )
-            }
-        }
-
-        Surface(
-            color = cardColor,
-            shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, gold.copy(alpha = 0.45f)),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+        item {
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = lightCardBg,
+                border = BorderStroke(1.3.dp, goldBorder)
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("الأذكار الصوتية التلقائية", color = gold, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Text("نطق الذكر تلقائياً حسب الوقت المحدد", color = cream.copy(alpha = 0.8f), fontSize = 12.sp)
+                        Text(
+                            text = "الوضع الليلي الزمردي الداكن",
+                            color = primaryInk,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = indexFont
+                        )
+                        Text(
+                            text = "التبديل بين المظهر الكريمي الدافئ والداكن",
+                            color = primaryInk.copy(alpha = 0.7f),
+                            fontSize = 12.sp,
+                            fontFamily = indexFont
+                        )
                     }
                     Switch(
-                        checked = voiceEnabled,
-                        onCheckedChange = { checked ->
-                            voiceEnabled = checked
-                            applyVoiceSchedule(checked, intervalMinutes, selectedPhrase, lockScreenNotify)
-                        },
-                        colors = SwitchDefaults.colors(checkedThumbColor = gold, checkedTrackColor = Color(0xFF1F634B))
+                        checked = isDarkTheme,
+                        onCheckedChange = onToggleDarkTheme,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = RoyalPalette.EmeraldDeep,
+                            checkedTrackColor = RoyalPalette.GoldRoyal
+                        )
                     )
                 }
+            }
+        }
 
-                Text("الفترة الزمنية (بالدقائق):", color = cream, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+        item {
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = lightCardBg,
+                border = BorderStroke(1.3.dp, goldBorder)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    intervals.forEach { mins ->
-                        val active = intervalMinutes == mins
-                        Surface(
-                            color = if (active) gold else Color(0xFF0A241B),
-                            shape = RoundedCornerShape(10.dp),
-                            border = BorderStroke(1.dp, gold.copy(alpha = 0.5f)),
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable {
-                                    intervalMinutes = mins
-                                    applyVoiceSchedule(voiceEnabled, mins, selectedPhrase, lockScreenNotify)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "تفعيل الأذكار الصوتية المجدولة",
+                            color = primaryInk,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = indexFont
+                        )
+                        Switch(
+                            checked = voiceEnabled,
+                            onCheckedChange = { checked ->
+                                voiceEnabled = checked
+                                applyVoiceSchedule(checked, intervalMinutes, selectedPhrase, lockScreenVisible)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = RoyalPalette.EmeraldDeep,
+                                checkedTrackColor = RoyalPalette.GoldRoyal
+                            )
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "إظهار الإشعار على شاشة القفل",
+                            color = primaryInk,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = indexFont
+                        )
+                        Switch(
+                            checked = lockScreenVisible,
+                            onCheckedChange = { checked ->
+                                lockScreenVisible = checked
+                                if (voiceEnabled) {
+                                    applyVoiceSchedule(true, intervalMinutes, selectedPhrase, checked)
                                 }
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 8.dp)) {
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = RoyalPalette.EmeraldDeep,
+                                checkedTrackColor = RoyalPalette.GoldRoyal
+                            )
+                        )
+                    }
+
+                    Text(
+                        text = "الفترة الزمنية للتكرار:",
+                        color = primaryInk,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = indexFont
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        intervals.forEach { mins ->
+                            val active = intervalMinutes == mins
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable {
+                                        intervalMinutes = mins
+                                        if (voiceEnabled) {
+                                            applyVoiceSchedule(true, mins, selectedPhrase, lockScreenVisible)
+                                        }
+                                    },
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (active) cardBg else screenBg,
+                                border = BorderStroke(1.dp, goldBorder)
+                            ) {
                                 Text(
-                                    text = "${mins}د",
-                                    color = if (active) RoyalPalette.EmeraldRoyal else cream,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
+                                    text = "$mins د",
+                                    color = if (active) RoyalPalette.CreamText else primaryInk,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = indexFont,
+                                    modifier = Modifier.padding(vertical = 8.dp),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
                             }
                         }
                     }
-                }
 
-                Text("اختر الذكر الصوتي:", color = cream, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                VoiceAdhkarScheduler.availablePhrases.forEach { phrase ->
-                    val active = selectedPhrase == phrase
-                    Surface(
-                        color = if (active) gold.copy(alpha = 0.2f) else Color(0xFF0A241B),
-                        shape = RoundedCornerShape(10.dp),
-                        border = BorderStroke(1.dp, if (active) gold else gold.copy(alpha = 0.25f)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                selectedPhrase = phrase
-                                applyVoiceSchedule(voiceEnabled, intervalMinutes, phrase, lockScreenNotify)
-                            }
-                    ) {
-                        Row(
+                    Text(
+                        text = "اختر عبارة الذكر الصوتي:",
+                        color = primaryInk,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = indexFont
+                    )
+
+                    VoiceAdhkarScheduler.availablePhrases.forEach { phrase ->
+                        val picked = selectedPhrase == phrase
+                        Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    selectedPhrase = phrase
+                                    if (voiceEnabled) {
+                                        applyVoiceSchedule(true, intervalMinutes, phrase, lockScreenVisible)
+                                    }
+                                },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (picked) cardBg else screenBg,
+                            border = BorderStroke(1.dp, goldBorder)
                         ) {
-                            Text(text = phrase, color = cream, fontSize = 14.sp)
-                            if (active) {
-                                Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = gold)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = phrase,
+                                    color = if (picked) RoyalPalette.CreamText else primaryInk,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = indexFont
+                                )
+                                if (picked) RoyalBadgePill(label = "مفعّل")
                             }
                         }
                     }
-                }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "إشعار على الشاشة حتى والهاتف مقفل",
-                        color = cream,
-                        fontSize = 14.sp,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Switch(
-                        checked = lockScreenNotify,
-                        onCheckedChange = { checked ->
-                            lockScreenNotify = checked
-                            applyVoiceSchedule(voiceEnabled, intervalMinutes, selectedPhrase, checked)
-                        },
-                        colors = SwitchDefaults.colors(checkedThumbColor = gold, checkedTrackColor = Color(0xFF1F634B))
-                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                voiceEnabled = true
+                                applyVoiceSchedule(true, intervalMinutes, selectedPhrase, lockScreenVisible)
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = RoyalPalette.GoldRoyal,
+                                contentColor = RoyalPalette.EmeraldDeep
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("حفظ الجدولة", fontWeight = FontWeight.Bold, fontFamily = indexFont)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                voiceEnabled = false
+                                applyVoiceSchedule(false, intervalMinutes, selectedPhrase, lockScreenVisible)
+                            },
+                            modifier = Modifier.weight(1f),
+                            border = BorderStroke(1.dp, goldBorder),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("إيقاف الجدولة", color = primaryInk, fontFamily = indexFont)
+                        }
+                    }
                 }
             }
         }

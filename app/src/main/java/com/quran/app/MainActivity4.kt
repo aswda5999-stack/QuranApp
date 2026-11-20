@@ -1,20 +1,40 @@
 package com.quran.app
 
+import android.media.MediaPlayer
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -27,6 +47,7 @@ fun AudioRecitersScreen(
 ) {
     val context = LocalContext.current
     val indexFont = remember(context) { CustomFontLoader.indexFont(context) }
+    val titleFont = remember(context) { CustomFontLoader.homeTitleFont(context) }
 
     val reciters = remember {
         listOf(
@@ -34,222 +55,209 @@ fun AudioRecitersScreen(
             "ماهر المعيقلي",
             "عبد الباسط عبد الصمد",
             "ياسر الدوسري",
-            "سعد الغامدي",
+            "محمود خليل الحصري",
             "ناصر القطامي",
-            "محمد صديق المنشاوي",
-            "محمود خليل الحصري"
+            "إسلام صبحي",
+            "سعد الغامدي"
         )
     }
 
-    val surahsIndex = remember {
+    val surahTracks = remember {
         listOf(
-            "الفاتحة", "البقرة", "آل عمران", "النساء", "المائدة", "الأنعام",
-            "الكهف", "يس", "الرحمن", "الواقعة", "الملك", "الناس"
+            "سورة الفاتحة" to "001",
+            "سورة البقرة" to "002",
+            "سورة الكهف" to "018",
+            "سورة يس" to "036",
+            "سورة الرحمن" to "055",
+            "سورة الواقعة" to "056",
+            "سورة الملك" to "067",
+            "سورة الإخلاص" to "112"
         )
     }
 
-    var selectedReciter by remember { mutableStateOf(reciters.first()) }
-    var showRecitersVerticalList by remember { mutableStateOf(false) }
-    var searchExpanded by remember { mutableStateOf(false) }
-    var activeSurah by remember { mutableStateOf<String?>(null) }
+    var reciterIndex by remember { mutableIntStateOf(0) }
+    var selectedSurahIndex by remember { mutableIntStateOf(0) }
+    var isPlaying by remember { mutableStateOf(false) }
+    var statusNote by remember { mutableStateOf("اختر السورة للتشغيل أو بدّل القارئ") }
+    var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
 
-    val emeraldBg = if (isDarkTheme) RoyalPalette.EmeraldDeep else RoyalPalette.EmeraldRoyal
-    val cardColor = if (isDarkTheme) RoyalPalette.EmeraldCardDark else RoyalPalette.EmeraldCard
-    val gold = RoyalPalette.GoldRoyal
-    val cream = RoyalPalette.CreamText
-
-    val filteredReciters = remember(searchQuery, reciters) {
-        if (searchQuery.isBlank()) reciters
-        else reciters.filter { it.contains(searchQuery.trim(), ignoreCase = true) }
+    fun releasePlayer() {
+        try {
+            mediaPlayer?.stop()
+        } catch (_: Exception) {
+        }
+        try {
+            mediaPlayer?.release()
+        } catch (_: Exception) {
+        }
+        mediaPlayer = null
+        isPlaying = false
     }
 
-    val filteredSurahs = remember(searchQuery, surahsIndex) {
-        if (searchQuery.isBlank()) surahsIndex
-        else surahsIndex.filter { it.contains(searchQuery.trim(), ignoreCase = true) }
+    DisposableEffect(Unit) {
+        onDispose { releasePlayer() }
+    }
+
+    fun startOrToggleStream(recIdx: Int, surIdx: Int) {
+        val reciter = reciters[recIdx]
+        val (surahName, code) = surahTracks[surIdx]
+        if (reciterIndex == recIdx && selectedSurahIndex == surIdx && isPlaying) {
+            releasePlayer()
+            statusNote = "تم إيقاف التشغيل • $reciter"
+            return
+        }
+        releasePlayer()
+        reciterIndex = recIdx
+        selectedSurahIndex = surIdx
+        statusNote = "جاري تجهيز بث $surahName بصوت $reciter..."
+        try {
+            val mp = MediaPlayer().apply {
+                setDataSource("https://server8.mp3quran.net/afs/$code.mp3")
+                setOnPreparedListener {
+                    start()
+                    isPlaying = true
+                    statusNote = "يعمل الآن: $surahName • $reciter"
+                }
+                setOnCompletionListener {
+                    isPlaying = false
+                    statusNote = "اكتملت تلاوة $surahName"
+                }
+                setOnErrorListener { _, _, _ ->
+                    isPlaying = false
+                    statusNote = "تعذر الاتصال بالبث المباشر (تحقق من الإنترنت)"
+                    true
+                }
+                prepareAsync()
+            }
+            mediaPlayer = mp
+        } catch (_: Exception) {
+            statusNote = "تعذر تهيئة المشغل الصوتي"
+        }
+    }
+
+    val screenBg = if (isDarkTheme) RoyalPalette.EmeraldDeep else RoyalPalette.CreamBackground
+    val cardBg = if (isDarkTheme) RoyalPalette.EmeraldCardDark else RoyalPalette.EmeraldRoyal
+    val lightCardBg = if (isDarkTheme) RoyalPalette.EmeraldCardDark else androidx.compose.ui.graphics.Color.White
+    val goldBorder = if (isDarkTheme) RoyalPalette.GoldHighlight else RoyalPalette.GoldRoyal
+    val primaryInk = if (isDarkTheme) RoyalPalette.CreamText else RoyalPalette.InkEmerald
+
+    val filteredTracks = remember(searchQuery, surahTracks) {
+        val q = searchQuery.trim()
+        if (q.isEmpty()) surahTracks else surahTracks.filter { it.first.contains(q) }
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(emeraldBg)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .background(screenBg)
+            .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
         Surface(
-            color = cardColor,
-            shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, gold.copy(alpha = 0.45f)),
-            modifier = Modifier.fillMaxWidth()
+            shape = RoundedCornerShape(20.dp),
+            color = cardBg,
+            border = BorderStroke(1.6.dp, goldBorder)
         ) {
-            Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    IconButton(onClick = onBackHome) {
-                        Icon(Icons.Rounded.ArrowForward, contentDescription = "رجوع", tint = gold)
-                    }
-
-                    Button(
-                        onClick = { showRecitersVerticalList = !showRecitersVerticalList },
-                        colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = RoyalPalette.EmeraldRoyal),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Icon(Icons.Rounded.RecordVoiceOver, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "تغيير القارئ",
-                            fontFamily = indexFont,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    IconButton(
-                        onClick = {
-                            searchExpanded = !searchExpanded
-                            if (!searchExpanded) onSearchQueryChange("")
-                        }
-                    ) {
-                        Icon(
-                            imageVector = if (searchExpanded) Icons.Rounded.Close else Icons.Rounded.Search,
-                            contentDescription = "بحث",
-                            tint = gold
-                        )
-                    }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "الصوتيات والقراء",
+                        color = RoyalPalette.CreamText,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = titleFont
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "القارئ: ${reciters[reciterIndex]}",
+                        color = RoyalPalette.GoldHighlight,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = indexFont,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = statusNote,
+                        color = RoyalPalette.CreamText.copy(alpha = 0.85f),
+                        fontSize = 11.sp,
+                        fontFamily = indexFont,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
 
-                if (searchExpanded) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = onSearchQueryChange,
-                        singleLine = true,
-                        placeholder = { Text("ابحث عن قارئ أو سورة...", color = cream.copy(alpha = 0.6f)) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = cream,
-                            unfocusedTextColor = cream,
-                            focusedBorderColor = gold,
-                            unfocusedBorderColor = gold.copy(alpha = 0.4f)
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Button(
+                        onClick = {
+                            val nextRec = (reciterIndex + 1) % reciters.size
+                            startOrToggleStream(nextRec, selectedSurahIndex)
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = RoyalPalette.GoldRoyal,
+                            contentColor = RoyalPalette.EmeraldDeep
                         ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text("تغيير القارئ", fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = indexFont)
+                    }
+
+                    if (isPlaying) {
+                        OutlinedButton(
+                            onClick = { releasePlayer(); statusNote = "تم الإيقاف" },
+                            border = BorderStroke(1.dp, RoyalPalette.GoldHighlight),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text("إيقاف", color = RoyalPalette.GoldHighlight, fontSize = 11.sp, fontFamily = indexFont)
+                        }
+                    }
                 }
             }
         }
 
-        if (showRecitersVerticalList) {
-            Text(
-                text = "اختر القارئ",
-                color = gold,
-                fontFamily = indexFont,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                items(filteredReciters) { reciter ->
-                    val isSelected = reciter == selectedReciter
-                    Surface(
-                        color = if (isSelected) gold.copy(alpha = 0.2f) else cardColor,
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, if (isSelected) gold else gold.copy(alpha = 0.3f)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                selectedReciter = reciter
-                                showRecitersVerticalList = false
-                            }
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = reciter,
-                                color = cream,
-                                fontFamily = indexFont,
-                                fontSize = 16.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                            )
-                            if (isSelected) {
-                                Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = gold)
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            Surface(
-                color = cardColor,
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, gold.copy(alpha = 0.35f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "القارئ الحالي: $selectedReciter",
-                        color = cream,
-                        fontFamily = indexFont,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    if (activeSurah != null) {
-                        Text(
-                            text = "يشغّل: $activeSurah",
-                            color = gold,
-                            fontFamily = indexFont,
-                            fontSize = 13.sp
-                        )
-                    }
-                }
-            }
+        Spacer(modifier = Modifier.height(10.dp))
 
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                items(filteredSurahs) { surah ->
-                    val playing = activeSurah == surah
-                    Surface(
-                        color = cardColor,
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, if (playing) gold else gold.copy(alpha = 0.25f)),
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(bottom = 12.dp)
+        ) {
+            itemsIndexed(filteredTracks) { idx, (surahTitle, _) ->
+                val actualIdx = surahTracks.indexOfFirst { it.first == surahTitle }.coerceAtLeast(idx)
+                val activeRow = actualIdx == selectedSurahIndex && isPlaying
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable { startOrToggleStream(reciterIndex, actualIdx) },
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (activeRow) cardBg else lightCardBg,
+                    border = BorderStroke(1.3.dp, goldBorder)
+                ) {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable {
-                                activeSurah = if (playing) null else surah
-                            }
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "سورة $surah",
-                                color = cream,
-                                fontFamily = indexFont,
-                                fontSize = 16.sp
-                            )
-                            Icon(
-                                imageVector = if (playing) Icons.Rounded.PauseCircleFilled else Icons.Rounded.PlayCircleFilled,
-                                contentDescription = null,
-                                tint = gold,
-                                modifier = Modifier.size(26.dp)
-                            )
-                        }
+                        Text(
+                            text = surahTitle,
+                            color = if (activeRow) RoyalPalette.CreamText else primaryInk,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = indexFont
+                        )
+                        RoyalBadgePill(label = if (activeRow) "يُشغّل" else "تشغيل")
                     }
                 }
             }

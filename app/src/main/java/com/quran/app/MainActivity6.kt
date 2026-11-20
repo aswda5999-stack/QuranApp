@@ -7,24 +7,42 @@ import android.content.Intent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 data class EssentialDhikr(
     val id: Int,
+    val title: String,
     val text: String,
     val target: Int
 )
@@ -38,212 +56,186 @@ fun EssentialAdhkarScreen(
 ) {
     val context = LocalContext.current
     val adhkarFont = remember(context) { CustomFontLoader.adhkarFont(context) }
+    val indexFont = remember(context) { CustomFontLoader.indexFont(context) }
+    val titleFont = remember(context) { CustomFontLoader.homeTitleFont(context) }
 
     val essentialList = remember {
         listOf(
-            EssentialDhikr(1, "سبحان الله وبحمده، سبحان الله العظيم", 3),
-            EssentialDhikr(2, "اللهم بك أصبحنا وبك أمسينا وبك نحيا وبك نموت وإليك المصير", 1),
-            EssentialDhikr(3, "أستغفر الله العظيم الذي لا إله إلا هو الحي القيوم وأتوب إليه", 3),
-            EssentialDhikr(4, "لا إله إلا الله وحده لا شريك له، له الملك وله الحمد وهو على كل شيء قدير", 10),
-            EssentialDhikr(5, "اللهم صلِّ وسلم على نبينا محمد", 10),
-            EssentialDhikr(6, "حسبي الله لا إله إلا هو عليه توكلت وهو رب العرش العظيم", 7)
+            EssentialDhikr(1, "تسبيح وتنزيه", "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ، سُبْحَانَ اللَّهِ الْعَظِيمِ", 3),
+            EssentialDhikr(2, "سيد الاستغفار", "اللَّهُمَّ أَنْتَ رَبِّي لَا إِلَهَ إِلَّا أَنْتَ، خَلَقْتَنِي وَأَنَا عَبْدُكَ، وَأَنَا عَلَى عَهْدِكَ وَوَعْدِكَ مَا اسْتَطَعْتُ", 1),
+            EssentialDhikr(3, "الرضا بالله", "رَضِيتُ بِاللَّهِ رَبًّا، وَبِالْإِسْلَامِ دِينًا، وَبِمُحَمَّدٍ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ نَبِيًّا", 3),
+            EssentialDhikr(4, "حوقلة ودعاء", "لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ الْعَلِيِّ الْعَظِيمِ", 10),
+            EssentialDhikr(5, "التهليل", "لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ", 10),
+            EssentialDhikr(6, "الصلاة على النبي ﷺ", "اللَّهُمَّ صَلِّ وَسَلِّمْ وَبَارِكْ عَلَى نَبِيِّنَا مُحَمَّدٍ وَعَلَى آلِهِ وَصَحْبِهِ أَجْمَعِينَ", 10),
+            EssentialDhikr(7, "الاستغفار", "أَسْتَغْفِرُ اللَّهَ الْعَظِيمَ الَّذِي لَا إِلَهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ وَأَتُوبُ إِلَيْهِ", 10)
         )
     }
 
     val counts = remember { mutableStateMapOf<Int, Int>() }
-    var searchExpanded by remember { mutableStateOf(false) }
+    var lastActionMessage by remember { mutableStateOf("اضغط على مربع العداد لزيادة الذكر") }
 
-    val emeraldBg = if (isDarkTheme) RoyalPalette.EmeraldDeep else RoyalPalette.EmeraldRoyal
-    val cardColor = if (isDarkTheme) RoyalPalette.EmeraldCardDark else RoyalPalette.EmeraldCard
-    val gold = RoyalPalette.GoldRoyal
-    val cream = RoyalPalette.CreamText
-    val counterActiveBg = Color(0xFFD99B26)
-    val counterDoneBg = Color(0xFF2E7D5B)
+    val screenBg = if (isDarkTheme) RoyalPalette.EmeraldDeep else RoyalPalette.CreamBackground
+    val cardBg = if (isDarkTheme) RoyalPalette.EmeraldCardDark else RoyalPalette.EmeraldRoyal
+    val lightCardBg = if (isDarkTheme) RoyalPalette.EmeraldCardDark else Color.White
+    val goldBorder = if (isDarkTheme) RoyalPalette.GoldHighlight else RoyalPalette.GoldRoyal
+    val primaryInk = if (isDarkTheme) RoyalPalette.CreamText else RoyalPalette.InkEmerald
 
-    val filtered = remember(searchQuery, essentialList) {
-        if (searchQuery.isBlank()) essentialList
-        else essentialList.filter { it.text.contains(searchQuery.trim(), ignoreCase = true) }
+    val filteredAdhkar = remember(searchQuery, essentialList) {
+        val q = searchQuery.trim()
+        if (q.isEmpty()) essentialList else essentialList.filter { it.text.contains(q) || it.title.contains(q) }
     }
 
-    Column(
+    fun copyDhikr(text: String) {
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        cm?.setPrimaryClip(ClipData.newPlainText("dhikr", text))
+        lastActionMessage = "تم نسخ الذكر إلى الحافظة"
+    }
+
+    fun shareDhikr(text: String) {
+        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+            putExtra(Intent.EXTRA_TEXT, text)
+            type = "text/plain"
+        }
+        context.startActivity(Intent.createChooser(sendIntent, "مشاركة الذكر"))
+    }
+
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(emeraldBg)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .background(screenBg)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(bottom = 14.dp)
     ) {
-        Surface(
-            color = cardColor,
-            shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, gold.copy(alpha = 0.45f)),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(6.dp)) {
+        item {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = cardBg,
+                border = BorderStroke(1.6.dp, goldBorder)
+            ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onBackHome) {
-                            Icon(Icons.Rounded.ArrowForward, contentDescription = "رجوع", tint = gold)
-                        }
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "أهم الأذكار",
-                            color = cream,
-                            fontFamily = adhkarFont,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
+                            text = "أهم الأذكار والمسبحة",
+                            color = RoyalPalette.CreamText,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = titleFont
+                        )
+                        Text(
+                            text = lastActionMessage,
+                            color = RoyalPalette.GoldHighlight,
+                            fontSize = 12.sp,
+                            fontFamily = indexFont
                         )
                     }
-                    IconButton(
-                        onClick = {
-                            searchExpanded = !searchExpanded
-                            if (!searchExpanded) onSearchQueryChange("")
-                        }
+                    OutlinedButton(
+                        onClick = { counts.clear(); lastActionMessage = "تم تصفير جميع العدادات" },
+                        border = BorderStroke(1.dp, RoyalPalette.GoldHighlight),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                     ) {
-                        Icon(
-                            imageVector = if (searchExpanded) Icons.Rounded.Close else Icons.Rounded.Search,
-                            contentDescription = "بحث",
-                            tint = gold
-                        )
+                        Text("تصفير الكل", color = RoyalPalette.GoldHighlight, fontSize = 11.sp, fontFamily = indexFont)
                     }
-                }
-
-                if (searchExpanded) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = onSearchQueryChange,
-                        singleLine = true,
-                        placeholder = { Text("ابحث في الأذكار...", color = cream.copy(alpha = 0.6f)) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = cream,
-                            unfocusedTextColor = cream,
-                            focusedBorderColor = gold,
-                            unfocusedBorderColor = gold.copy(alpha = 0.4f)
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 6.dp, vertical = 4.dp)
-                    )
                 }
             }
         }
 
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.weight(1f)
-        ) {
-            itemsIndexed(filtered, key = { _, item -> item.id }) { _, item ->
-                val currentCount = counts[item.id] ?: 0
-                val isCompleted = currentCount >= item.target
+        items(filteredAdhkar, key = { it.id }) { dhikr ->
+            val currentCount = counts[dhikr.id] ?: 0
+            val completed = currentCount >= dhikr.target
+            val counterBoxBg = if (completed) RoyalPalette.GoldRoyal else cardBg
+            val counterTextColor = if (completed) RoyalPalette.EmeraldDeep else RoyalPalette.CreamText
 
-                Surface(
-                    color = cardColor,
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.dp, gold.copy(alpha = 0.35f)),
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                color = lightCardBg,
+                border = BorderStroke(1.3.dp, goldBorder)
+            ) {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable {
-                            val next = (currentCount + 1).coerceAtMost(item.target)
-                            counts[item.id] = next
-                        }
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        Text(
+                            text = dhikr.title,
+                            color = if (isDarkTheme) RoyalPalette.GoldHighlight else RoyalPalette.EmeraldRoyal,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = indexFont
+                        )
+                        RoyalBadgePill(label = "المطلوب: ${dhikr.target}")
+                    }
+
+                    Text(
+                        text = dhikr.text,
+                        color = primaryInk,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = adhkarFont,
+                        lineHeight = 30.sp,
+                        textAlign = TextAlign.Start
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            modifier = Modifier
+                                .weight(1.4f)
+                                .clip(RoundedCornerShape(14.dp))
+                                .clickable {
+                                    val next = currentCount + 1
+                                    counts[dhikr.id] = next
+                                    lastActionMessage = if (next >= dhikr.target) "أتممت ${dhikr.title}" else "تم تسجيل ذكر ($next / ${dhikr.target})"
+                                },
+                            shape = RoundedCornerShape(14.dp),
+                            color = counterBoxBg,
+                            border = BorderStroke(1.2.dp, goldBorder)
                         ) {
                             Text(
-                                text = item.text,
-                                color = cream,
-                                fontFamily = adhkarFont,
-                                fontSize = 16.sp,
-                                lineHeight = 26.sp,
-                                modifier = Modifier.weight(1f)
+                                text = if (completed) "✓ مكتمل ($currentCount / ${dhikr.target})" else "تسبيح ($currentCount / ${dhikr.target})",
+                                color = counterTextColor,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = indexFont,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp)
                             )
-
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .size(54.dp)
-                                    .background(
-                                        color = when {
-                                            isCompleted -> counterDoneBg
-                                            currentCount > 0 -> counterActiveBg
-                                            else -> Color(0xFF0A241B)
-                                        },
-                                        shape = RoundedCornerShape(12.dp)
-                                    )
-                            ) {
-                                Text(
-                                    text = "$currentCount / ${item.target}",
-                                    color = Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
                         }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End,
-                            verticalAlignment = Alignment.CenterVertically
+                        Button(
+                            onClick = { copyDhikr(dhikr.text) },
+                            modifier = Modifier.weight(0.8f),
+                            colors = ButtonDefaults.buttonColors(containerColor = cardBg, contentColor = RoyalPalette.CreamText),
+                            shape = RoundedCornerShape(14.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
                         ) {
-                            Surface(
-                                color = Color(0xFF1F634B),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.clickable {
-                                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    cm.setPrimaryClip(ClipData.newPlainText("dhikr", item.text))
-                                }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.ContentCopy,
-                                        contentDescription = "نسخ",
-                                        tint = gold,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    Text("نسخ", color = cream, fontSize = 12.sp)
-                                }
-                            }
+                            Text("نسخ", fontSize = 12.sp, fontFamily = indexFont)
+                        }
 
-                            Spacer(modifier = Modifier.width(8.dp))
-
-                            Surface(
-                                color = Color(0xFF8C651C),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.clickable {
-                                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                        type = "text/plain"
-                                        putExtra(Intent.EXTRA_TEXT, item.text)
-                                    }
-                                    context.startActivity(Intent.createChooser(sendIntent, "مشاركة الذكر"))
-                                }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Share,
-                                        contentDescription = "مشاركة",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    Text("مشاركة", color = Color.White, fontSize = 12.sp)
-                                }
-                            }
+                        OutlinedButton(
+                            onClick = { shareDhikr(dhikr.text) },
+                            modifier = Modifier.weight(0.8f),
+                            border = BorderStroke(1.dp, goldBorder),
+                            shape = RoundedCornerShape(14.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+                        ) {
+                            Text("مشاركة", color = primaryInk, fontSize = 12.sp, fontFamily = indexFont)
                         }
                     }
                 }

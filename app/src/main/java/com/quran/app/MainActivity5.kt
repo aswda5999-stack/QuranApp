@@ -1,29 +1,57 @@
 package com.quran.app
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.cos
-import kotlin.math.sin
+import androidx.core.content.ContextCompat
 
 @Composable
 fun AdhanAndQiblaScreen(
@@ -34,279 +62,301 @@ fun AdhanAndQiblaScreen(
     onBackHome: () -> Unit
 ) {
     val context = LocalContext.current
+    val indexFont = remember(context) { CustomFontLoader.indexFont(context) }
+    val titleFont = remember(context) { CustomFontLoader.homeTitleFont(context) }
+
     var qiblaIsolatedMode by remember(startOnQibla) { mutableStateOf(startOnQibla) }
     var showMuezzinList by remember { mutableStateOf(false) }
-    var searchExpanded by remember { mutableStateOf(false) }
-
-    val muezzins = remember {
-        listOf(
-            "مؤذن المسجد الحرام • علي الملا",
-            "مؤذن المسجد النبوي • عصام بخاري",
-            "مشاري راشد العفاسي",
-            "ماجد الحمداني",
-            "منصور الزهراني"
-        )
-    }
-    var selectedMuezzin by remember { mutableStateOf(muezzins.first()) }
-
-    val prayerTimes = remember {
-        listOf(
-            "الفجر" to "04:58 ص",
-            "الظهر" to "11:42 ص",
-            "العصر" to "02:36 م",
-            "المغرب" to "04:51 م",
-            "العشاء" to "06:14 م"
-        )
-    }
-
+    var selectedMuezzin by remember { mutableStateOf("أذان المسجد النبوي الشريف") }
+    var userLat by remember { mutableDoubleStateOf(33.5138) }
+    var userLon by remember { mutableDoubleStateOf(36.2765) }
     var azimuth by remember { mutableFloatStateOf(0f) }
-    val qiblaBearing = remember { QiblaCalculator.bearingToKaaba(36.2021, 37.1343) }
-    val relativeNeedle = ((qiblaBearing - azimuth + 360f) % 360f)
 
-    DisposableEffect(qiblaIsolatedMode) {
-        val tracker = CompassTracker(context) { newAzimuth -> azimuth = newAzimuth }
-        if (qiblaIsolatedMode) tracker.start()
+    fun refreshLastLocation() {
+        val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val hasCoarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!hasFine && !hasCoarse) return
+        val lm = context.getSystemService(android.content.Context.LOCATION_SERVICE) as? LocationManager ?: return
+        val providers = lm.getProviders(true)
+        var best: Location? = null
+        for (p in providers) {
+            val loc = try { lm.getLastKnownLocation(p) } catch (_: SecurityException) { null }
+            if (loc != null && (best == null || loc.accuracy < best.accuracy)) {
+                best = loc
+            }
+        }
+        if (best != null) {
+            userLat = best.latitude
+            userLon = best.longitude
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ -> refreshLastLocation() }
+
+    DisposableEffect(Unit) {
+        refreshLastLocation()
+        val tracker = CompassTracker(context) { newAz -> azimuth = newAz }
+        tracker.start()
         onDispose { tracker.stop() }
     }
 
-    val emeraldBg = if (isDarkTheme) RoyalPalette.EmeraldDeep else RoyalPalette.EmeraldRoyal
-    val cardColor = if (isDarkTheme) RoyalPalette.EmeraldCardDark else RoyalPalette.EmeraldCard
-    val gold = RoyalPalette.GoldRoyal
-    val cream = RoyalPalette.CreamText
+    val qiblaBearing = remember(userLat, userLon) { QiblaCalculator.bearingToKaaba(userLat, userLon) }
+    val relativeAngle = ((qiblaBearing - azimuth) + 360f) % 360f
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(emeraldBg)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Surface(
-            color = cardColor,
-            shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, gold.copy(alpha = 0.45f)),
-            modifier = Modifier.fillMaxWidth()
+    val screenBg = if (isDarkTheme) RoyalPalette.EmeraldDeep else RoyalPalette.CreamBackground
+    val cardBg = if (isDarkTheme) RoyalPalette.EmeraldCardDark else RoyalPalette.EmeraldRoyal
+    val lightCardBg = if (isDarkTheme) RoyalPalette.EmeraldCardDark else Color.White
+    val goldBorder = if (isDarkTheme) RoyalPalette.GoldHighlight else RoyalPalette.GoldRoyal
+    val primaryInk = if (isDarkTheme) RoyalPalette.CreamText else RoyalPalette.InkEmerald
+
+    val prayerSchedule = remember {
+        listOf(
+            "الفجر" to "04:58 ص",
+            "الشروق" to "06:24 ص",
+            "الظهر" to "11:42 ص",
+            "العصر" to "02:36 م",
+            "المغرب" to "04:56 م",
+            "العشاء" to "06:18 م"
+        )
+    }
+    val muezzins = remember {
+        listOf(
+            "أذان المسجد النبوي الشريف",
+            "أذان المسجد الحرام بمكة",
+            "أذان الشيخ مشاري راشد العفاسي",
+            "أذان الشيخ علي أحمد ملا"
+        )
+    }
+
+    if (qiblaIsolatedMode) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(screenBg)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onBackHome) {
-                            Icon(Icons.Rounded.ArrowForward, contentDescription = "رجوع", tint = gold)
-                        }
-                        Text(
-                            text = if (qiblaIsolatedMode) "القبلة والبوصلة" else "المؤذن ومواقيت الصلاة",
-                            color = cream,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    IconButton(
-                        onClick = {
-                            searchExpanded = !searchExpanded
-                            if (!searchExpanded) onSearchQueryChange("")
-                        }
-                    ) {
-                        Icon(
-                            imageVector = if (searchExpanded) Icons.Rounded.Close else Icons.Rounded.Search,
-                            contentDescription = "بحث",
-                            tint = gold
-                        )
-                    }
-                }
-
-                if (searchExpanded) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = onSearchQueryChange,
-                        singleLine = true,
-                        placeholder = { Text("ابحث عن مؤذن أو صلاة...", color = cream.copy(alpha = 0.6f)) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = cream,
-                            unfocusedTextColor = cream,
-                            focusedBorderColor = gold,
-                            unfocusedBorderColor = gold.copy(alpha = 0.4f)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-        }
-
-        if (qiblaIsolatedMode) {
             Surface(
-                color = cardColor,
-                shape = RoundedCornerShape(18.dp),
-                border = BorderStroke(1.dp, gold.copy(alpha = 0.5f)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    Text(
-                        text = "اتجاه القبلة: ${qiblaBearing.toInt()}° | اتجاه الجهاز: ${azimuth.toInt()}°",
-                        color = gold,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Canvas(modifier = Modifier.size(230.dp)) {
-                        val center = Offset(size.width / 2f, size.height / 2f)
-                        val radius = size.minDimension / 2f - 14f
-
-                        drawCircle(
-                            color = gold.copy(alpha = 0.18f),
-                            radius = radius,
-                            center = center
-                        )
-                        drawCircle(
-                            color = gold,
-                            radius = radius,
-                            center = center,
-                            style = Stroke(width = 4.dp.toPx())
-                        )
-
-                        val rad = Math.toRadians((relativeNeedle - 90.0))
-                        val tipX = center.x + (radius * 0.82f * cos(rad)).toFloat()
-                        val tipY = center.y + (radius * 0.82f * sin(rad)).toFloat()
-
-                        drawLine(
-                            color = Color(0xFF4ADE80),
-                            start = center,
-                            end = Offset(tipX, tipY),
-                            strokeWidth = 7.dp.toPx(),
-                            cap = StrokeCap.Round
-                        )
-                        drawCircle(
-                            color = gold,
-                            radius = 9.dp.toPx(),
-                            center = center
-                        )
-                    }
-
-                    Text(
-                        text = "حرّك الهاتف ببطء بشكل أفقي لتحديد الاتجاه بدقة",
-                        color = cream.copy(alpha = 0.85f),
-                        fontSize = 13.sp
-                    )
-
-                    OutlinedButton(
-                        onClick = { qiblaIsolatedMode = false },
-                        border = BorderStroke(1.dp, gold)
-                    ) {
-                        Text("العودة إلى شاشة المؤذن", color = gold)
-                    }
-                }
-            }
-        } else {
-            Surface(
-                color = cardColor,
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, gold.copy(alpha = 0.4f)),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                color = cardBg,
+                border = BorderStroke(1.5.dp, goldBorder)
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(text = "المؤذن المحدد", color = gold, fontSize = 12.sp)
-                        Text(
-                            text = selectedMuezzin,
-                            color = cream,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Button(
-                        onClick = { showMuezzinList = !showMuezzinList },
-                        colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = RoyalPalette.EmeraldRoyal),
-                        shape = RoundedCornerShape(10.dp)
+                    Text(
+                        text = "بوصلة القبلة المعزولة",
+                        color = RoyalPalette.CreamText,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = titleFont
+                    )
+                    OutlinedButton(
+                        onClick = { qiblaIsolatedMode = false },
+                        border = BorderStroke(1.dp, RoyalPalette.GoldHighlight),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                     ) {
-                        Text(
-                            text = if (showMuezzinList) "إغلاق القائمة" else "تغيير المؤذن",
-                            fontWeight = FontWeight.Bold
-                        )
+                        Text("مواقيت الأذان", color = RoyalPalette.GoldHighlight, fontSize = 12.sp, fontFamily = indexFont)
                     }
                 }
             }
 
-            if (showMuezzinList) {
-                val filteredMuezzins = muezzins.filter {
-                    searchQuery.isBlank() || it.contains(searchQuery.trim(), ignoreCase = true)
-                }
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    modifier = Modifier.size(250.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    items(filteredMuezzins) { m ->
-                        val active = m == selectedMuezzin
-                        Surface(
-                            color = if (active) gold.copy(alpha = 0.2f) else cardColor,
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, if (active) gold else gold.copy(alpha = 0.3f)),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    selectedMuezzin = m
-                                    showMuezzinList = false
-                                }
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(text = m, color = cream, fontSize = 15.sp)
-                                if (active) {
-                                    Icon(Icons.Rounded.Check, contentDescription = null, tint = gold)
-                                }
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val c = Offset(size.width / 2f, size.height / 2f)
+                        val r = size.minDimension * 0.44f
+                        drawCircle(
+                            color = goldBorder.copy(alpha = 0.25f),
+                            radius = r,
+                            center = c
+                        )
+                        drawCircle(
+                            color = goldBorder,
+                            radius = r,
+                            center = c,
+                            style = Stroke(width = 3.dp.toPx())
+                        )
+                        rotate(degrees = relativeAngle, pivot = c) {
+                            val arrow = Path().apply {
+                                moveTo(c.x, c.y - r * 0.78f)
+                                lineTo(c.x + r * 0.16f, c.y + r * 0.12f)
+                                lineTo(c.x, c.y - r * 0.04f)
+                                lineTo(c.x - r * 0.16f, c.y + r * 0.12f)
+                                close()
                             }
+                            drawPath(arrow, color = RoyalPalette.GoldRoyal)
+                            drawLine(
+                                color = RoyalPalette.GoldHighlight,
+                                start = Offset(c.x, c.y - r * 0.78f),
+                                end = Offset(c.x, c.y + r * 0.55f),
+                                strokeWidth = 2.5.dp.toPx(),
+                                cap = StrokeCap.Round
+                            )
                         }
                     }
                 }
-            } else {
-                val filteredTimes = prayerTimes.filter {
-                    searchQuery.isBlank() || it.first.contains(searchQuery.trim(), ignoreCase = true)
-                }
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f)
+
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "زاوية القبلة: ${qiblaBearing.toInt()}° • اتجاه الجهاز: ${azimuth.toInt()}°",
+                    color = primaryInk,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = indexFont,
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            Button(
+                onClick = {
+                    permissionLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                    )
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = cardBg, contentColor = RoyalPalette.CreamText),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("تحديث الموقع الجغرافي للقبلة", fontFamily = indexFont, fontWeight = FontWeight.Bold)
+            }
+        }
+        return
+    }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(screenBg)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(bottom = 14.dp)
+    ) {
+        item {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = cardBg,
+                border = BorderStroke(1.6.dp, goldBorder)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(filteredTimes) { (prayer, time) ->
-                        Surface(
-                            color = cardColor,
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, gold.copy(alpha = 0.25f)),
-                            modifier = Modifier.fillMaxWidth()
+                    Text(
+                        text = "المؤذن ومواقيت الصلاة",
+                        color = RoyalPalette.CreamText,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = titleFont
+                    )
+                    Text(
+                        text = "صوت المؤذن المعتمد: $selectedMuezzin",
+                        color = RoyalPalette.GoldHighlight,
+                        fontSize = 13.sp,
+                        fontFamily = indexFont
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { showMuezzinList = !showMuezzinList },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = RoyalPalette.GoldRoyal,
+                                contentColor = RoyalPalette.EmeraldDeep
+                            ),
+                            shape = RoundedCornerShape(12.dp)
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(text = prayer, color = cream, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                                Text(text = time, color = gold, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                            }
+                            Text("اختيار المؤذن", fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = indexFont)
+                        }
+
+                        OutlinedButton(
+                            onClick = { qiblaIsolatedMode = true },
+                            modifier = Modifier.weight(1f),
+                            border = BorderStroke(1.dp, RoyalPalette.GoldHighlight),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("بوصلة القبلة", color = RoyalPalette.GoldHighlight, fontSize = 12.sp, fontFamily = indexFont)
                         }
                     }
+                }
+            }
+        }
+
+        if (showMuezzinList) {
+            items(muezzins) { mName ->
+                val isSel = mName == selectedMuezzin
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable {
+                            selectedMuezzin = mName
+                            showMuezzinList = false
+                        },
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (isSel) cardBg else lightCardBg,
+                    border = BorderStroke(1.2.dp, goldBorder)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = mName,
+                            color = if (isSel) RoyalPalette.CreamText else primaryInk,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = indexFont
+                        )
+                        if (isSel) RoyalBadgePill(label = "مختار")
+                    }
+                }
+            }
+        }
+
+        items(prayerSchedule) { (prayerName, prayerTime) ->
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = lightCardBg,
+                border = BorderStroke(1.2.dp, goldBorder.copy(alpha = 0.85f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 13.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = prayerName,
+                        color = primaryInk,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = indexFont
+                    )
+                    RoyalBadgePill(label = prayerTime)
                 }
             }
         }
