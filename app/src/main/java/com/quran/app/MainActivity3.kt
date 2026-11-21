@@ -3,20 +3,12 @@ package com.quran.app
 import android.content.Context
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.text.ClickableText
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.withStyle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.ui.input.pointer.awaitPointerEvent
-import androidx.compose.ui.input.pointer.calculatePan
-import androidx.compose.ui.input.pointer.calculateZoom
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,18 +22,23 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.ClickableText
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -61,14 +58,23 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 
 data class QuranIndexEntry(
     val title: String,
@@ -293,7 +299,10 @@ fun QuranIndexAndReaderScreen(
                             fontFamily = titleFont
                         )
 
-                        TextButton(onClick = { showTafsirLookup = true }, contentPadding = PaddingValues(horizontal = 5.dp, vertical = 4.dp)) {
+                        TextButton(
+                            onClick = { showTafsirLookup = true },
+                            contentPadding = PaddingValues(horizontal = 5.dp, vertical = 4.dp)
+                        ) {
                             Text("تفسير آية", color = RoyalPalette.GoldHighlight, fontSize = 11.sp, fontFamily = indexFont)
                         }
 
@@ -607,50 +616,80 @@ private fun TafsirLookupDialog(
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
-    val bg = if (isDarkTheme) RoyalPalette.EmeraldCardDark else androidx.compose.ui.graphics.Color.White
+    val bg = if (isDarkTheme) RoyalPalette.EmeraldCardDark else Color.White
     val ink = if (isDarkTheme) RoyalPalette.CreamText else RoyalPalette.InkEmerald
 
-    androidx.compose.material3.AlertDialog(
+    AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = bg,
         title = { Text("التفسير الميسّر", color = ink, fontWeight = FontWeight.Bold) },
         text = {
-            Column(Modifier.heightIn(max = 470.dp).verticalScroll(androidx.compose.foundation.rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 470.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Text("أدخل رقم السورة ورقم الآية لعرض التفسير الميسّر.", color = ink, fontSize = 12.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    androidx.compose.material3.OutlinedTextField(value = surahInput, onValueChange = { surahInput = it.filter(Char::isDigit) }, label = { Text("رقم السورة") }, modifier = Modifier.weight(1f), singleLine = true)
-                    androidx.compose.material3.OutlinedTextField(value = ayahInput, onValueChange = { ayahInput = it.filter(Char::isDigit) }, label = { Text("رقم الآية") }, modifier = Modifier.weight(1f), singleLine = true)
+                    OutlinedTextField(
+                        value = surahInput,
+                        onValueChange = { surahInput = it.filter(Char::isDigit) },
+                        label = { Text("رقم السورة") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = ayahInput,
+                        onValueChange = { ayahInput = it.filter(Char::isDigit) },
+                        label = { Text("رقم الآية") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
                 }
-                androidx.compose.material3.Button(
+                Button(
                     onClick = {
                         val surah = surahInput.toIntOrNull()
                         val ayah = ayahInput.toIntOrNull()
                         if (surah == null || surah !in 1..114 || ayah == null || ayah < 1) {
-                            error = "أدخل رقم سورة من 1 إلى 114 ورقم آية صحيحاً."; return@Button
+                            error = "أدخل رقم سورة من 1 إلى 114 ورقم آية صحيحاً."
+                            return@Button
                         }
-                        loading = true; error = ""; tafsir = ""; verse = ""
+                        loading = true
+                        error = ""
+                        tafsir = ""
+                        verse = ""
                         scope.launch {
                             try {
-                                val pair = withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                    val url = java.net.URL("https://quranenc.com/api/v1/translation/aya/arabic_moyassar/$surah/$ayah")
-                                    val connection = url.openConnection() as java.net.HttpURLConnection
+                                val pair = withContext(Dispatchers.IO) {
+                                    val url = URL("https://quranenc.com/api/v1/translation/aya/arabic_moyassar/$surah/$ayah")
+                                    val connection = url.openConnection() as HttpURLConnection
                                     try {
-                                        connection.connectTimeout = 12000; connection.readTimeout = 15000
-                                        val root = org.json.JSONObject(connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
+                                        connection.connectTimeout = 12000
+                                        connection.readTimeout = 15000
+                                        val root = JSONObject(connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
                                         val result = root.optJSONObject("result") ?: throw IllegalStateException("لا توجد نتيجة لهذه الآية")
                                         Pair(result.optString("arabic_text"), result.optString("translation"))
-                                    } finally { connection.disconnect() }
+                                    } finally {
+                                        connection.disconnect()
+                                    }
                                 }
-                                verse = pair.first; tafsir = pair.second
+                                verse = pair.first
+                                tafsir = pair.second
                                 if (tafsir.isBlank()) error = "لم يتوفر تفسير لهذه الآية حالياً."
-                            } catch (_: Exception) { error = "تعذر جلب التفسير. تحقق من الإنترنت أو من رقم الآية." }
-                            finally { loading = false }
+                            } catch (_: Exception) {
+                                error = "تعذر جلب التفسير. تحقق من الإنترنت أو من رقم الآية."
+                            } finally {
+                                loading = false
+                            }
                         }
                     },
                     enabled = !loading,
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = RoyalPalette.EmeraldRoyal, contentColor = RoyalPalette.CreamText)
-                ) { Text(if (loading) "جارٍ التحميل…" else "عرض التفسير") }
-                if (error.isNotBlank()) Text(error, color = androidx.compose.ui.graphics.Color(0xFFB3261E), fontSize = 12.sp)
+                    colors = ButtonDefaults.buttonColors(containerColor = RoyalPalette.EmeraldRoyal, contentColor = RoyalPalette.CreamText)
+                ) {
+                    Text(if (loading) "جارٍ التحميل…" else "عرض التفسير")
+                }
+                if (error.isNotBlank()) Text(error, color = Color(0xFFB3261E), fontSize = 12.sp)
                 if (verse.isNotBlank()) Text(verse, color = ink, fontSize = 18.sp, lineHeight = 30.sp, fontWeight = FontWeight.Bold)
                 if (tafsir.isNotBlank()) {
                     Text(tafsir, color = ink, fontSize = 15.sp, lineHeight = 25.sp)
@@ -658,6 +697,10 @@ private fun TafsirLookupDialog(
                 }
             }
         },
-        confirmButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text("إغلاق", color = RoyalPalette.GoldMuted) } }
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("إغلاق", color = RoyalPalette.GoldMuted)
+            }
+        }
     )
 }
