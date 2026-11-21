@@ -26,3 +26,7 @@ in Gradle. Configure release signing through local, untracked Gradle properties 
 - This source package has not been compiled on an Android SDK in this environment. Run
   `./gradlew :app:assembleDebug` in Android Studio and resolve any environment-specific
   SDK/plugin setup before release.
+
+
+## Quran text and tafsir providers (4.1)
+The PDF renderer and bundled mushaf PDF are removed. The reader now requests Uthmani word text and page/line metadata from the Quran.com Content API, using the 15-line mushaf layout. The user taps a word to open the selected ayah's Tafsir Muyassar through QuranEnc. The app must retain source attribution and the provider's translation version.
