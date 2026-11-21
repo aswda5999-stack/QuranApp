@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.quran.app.presentation.AppViewModel
 import androidx.activity.compose.setContent
@@ -38,6 +39,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -51,6 +53,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
@@ -162,7 +165,8 @@ enum class BottomNavTab(val route: String, val label: String) {
     QURAN("quran_reader", "المصحف"),
     AUDIO("audio", "الصوتيات"),
     ADHKAR("adhkar", "الأذكار"),
-    SETTINGS("settings", "الإعدادات")
+    SETTINGS("settings", "الإعدادات"),
+    FOLLOW("follow", "تابعنا")
 }
 
 @Composable
@@ -172,6 +176,7 @@ fun GlobalBottomNavigationBar(
     onSelectRoute: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val barBg = if (isDarkTheme) RoyalPalette.EmeraldCardDark else RoyalPalette.CreamBackground
     val borderCol = if (isDarkTheme) RoyalPalette.GoldRoyal.copy(alpha = 0.45f) else RoyalPalette.GoldRoyal.copy(alpha = 0.65f)
     val activePillBg = if (isDarkTheme) RoyalPalette.GoldRoyal else RoyalPalette.EmeraldRoyal
@@ -202,6 +207,7 @@ fun GlobalBottomNavigationBar(
                     BottomNavTab.AUDIO -> currentRoute == "audio"
                     BottomNavTab.ADHKAR -> currentRoute == "adhkar"
                     BottomNavTab.SETTINGS -> currentRoute == "settings"
+                    BottomNavTab.FOLLOW -> false
                 }
 
                 val itemBg = if (isSelected) activePillBg else Color.Transparent
@@ -212,7 +218,13 @@ fun GlobalBottomNavigationBar(
                         .weight(1f)
                         .clip(RoundedCornerShape(18.dp))
                         .background(itemBg)
-                        .clickable { onSelectRoute(tab.route) }
+                        .clickable {
+                            try {
+                                val audio = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+                                audio.playSoundEffect(android.view.SoundEffectConstants.CLICK)
+                            } catch (_: Exception) { }
+                            onSelectRoute(tab.route)
+                        }
                         .padding(vertical = 7.dp, horizontal = 2.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
@@ -237,7 +249,8 @@ fun GlobalBottomNavigationBar(
 @Composable
 private fun NavTabGlyph(tab: BottomNavTab, tint: Color, isSelected: Boolean) {
     val sizeDp = if (isSelected) 21.dp else 20.dp
-    Canvas(modifier = Modifier.size(sizeDp)) {
+    val iconScale by animateFloatAsState(if (isSelected) 1.12f else 1f, label = "navIconScale")
+    Canvas(modifier = Modifier.size(sizeDp).graphicsLayer(scaleX = iconScale, scaleY = iconScale)) {
         val w = size.width
         val h = size.height
         val stroke = Stroke(width = if (isSelected) 2.2f else 1.8f, cap = StrokeCap.Round)
@@ -292,6 +305,13 @@ private fun NavTabGlyph(tab: BottomNavTab, tint: Color, isSelected: Boolean) {
                 drawPath(bell, color = tint, style = stroke)
                 drawCircle(color = tint, radius = w * 0.08f, center = Offset(w * 0.5f, h * 0.78f))
             }
+            BottomNavTab.FOLLOW -> {
+                drawCircle(tint, radius = w * 0.12f, center = Offset(w * 0.25f, h * 0.5f), style = stroke)
+                drawCircle(tint, radius = w * 0.12f, center = Offset(w * 0.72f, h * 0.25f), style = stroke)
+                drawCircle(tint, radius = w * 0.12f, center = Offset(w * 0.72f, h * 0.75f), style = stroke)
+                drawLine(tint, Offset(w * 0.36f, h * 0.45f), Offset(w * 0.61f, h * 0.30f), strokeWidth = stroke.width)
+                drawLine(tint, Offset(w * 0.36f, h * 0.55f), Offset(w * 0.61f, h * 0.70f), strokeWidth = stroke.width)
+            }
             BottomNavTab.SETTINGS -> {
                 val pTop = Offset(w * 0.5f, h * 0.5f)
                 drawCircle(tint, radius = w * 0.30f, center = pTop, style = stroke)
@@ -326,6 +346,18 @@ class MainActivity : ComponentActivity() {
             var globalSearchQuery by appState.globalSearchQuery
             var qiblaIsolated by appState.qiblaIsolated
             var showFollowDialog by remember { mutableStateOf(false) }
+            var showExitDialog by remember { mutableStateOf(false) }
+
+            BackHandler {
+                when {
+                    showFollowDialog -> showFollowDialog = false
+                    currentRoute != "home" -> {
+                        currentRoute = "home"
+                        qiblaIsolated = false
+                    }
+                    else -> showExitDialog = true
+                }
+            }
 
             val dailyVerses = remember {
                 listOf(
@@ -376,6 +408,7 @@ class MainActivity : ComponentActivity() {
                                             "audio" -> currentRoute = "audio"
                                             "adhkar" -> currentRoute = "adhkar"
                                             "settings" -> currentRoute = "settings"
+                                            "follow" -> showFollowDialog = true
                                         }
                                     }
                                 )
@@ -483,6 +516,24 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             }
+                        }
+                        if (showExitDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showExitDialog = false },
+                                containerColor = if (isDarkTheme) RoyalPalette.EmeraldCardDark else RoyalPalette.CreamBackground,
+                                title = { Text("الخروج من التطبيق؟", color = if (isDarkTheme) RoyalPalette.CreamText else RoyalPalette.InkEmerald) },
+                                text = { Text("هل تريد حقاً إغلاق تطبيق القرآن الكريم؟", color = if (isDarkTheme) RoyalPalette.CreamText else RoyalPalette.InkEmerald) },
+                                confirmButton = {
+                                    TextButton(onClick = { showExitDialog = false; finish() }) {
+                                        Text("خروج", color = RoyalPalette.GoldMuted)
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showExitDialog = false }) {
+                                        Text("إلغاء", color = RoyalPalette.EmeraldRoyal)
+                                    }
+                                }
+                            )
                         }
                         if (showFollowDialog) {
                             AlertDialog(

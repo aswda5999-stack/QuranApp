@@ -23,6 +23,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -271,6 +272,22 @@ fun SettingsAndVoiceAdhkarScreen(
                             }
                         }
                     }
+
+                    Text(
+                        text = "تخصيص الفاصل الزمني: $intervalMinutes دقيقة",
+                        color = primaryInk,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = indexFont
+                    )
+                    Slider(
+                        value = intervalMinutes.toFloat().coerceIn(1f, 240f),
+                        onValueChange = { intervalMinutes = it.toInt().coerceIn(1, 240) },
+                        onValueChangeFinished = {
+                            if (voiceEnabled) applyVoiceSchedule(true, intervalMinutes, selectedPhrase, lockScreenVisible)
+                        },
+                        valueRange = 1f..240f
+                    )
 
                     Text(
                         text = "اختر عبارة الذكر الصوتي:",

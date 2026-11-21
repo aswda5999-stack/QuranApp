@@ -28,9 +28,11 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableFloatStateOf
@@ -67,9 +69,13 @@ fun AdhanAndQiblaScreen(
 
     var qiblaIsolatedMode by remember(startOnQibla) { mutableStateOf(startOnQibla) }
     var showMuezzinList by remember { mutableStateOf(false) }
-    var selectedMuezzin by remember { mutableStateOf("أذان المسجد النبوي الشريف") }
-    var userLat by remember { mutableDoubleStateOf(33.5138) }
-    var userLon by remember { mutableDoubleStateOf(36.2765) }
+    var selectedMuezzin by remember { mutableStateOf("أذان المسجد الحرام") }
+    val savedCoords = remember { PrayerTimesEngine.savedLocation(context) }
+    var userLat by remember { mutableDoubleStateOf(savedCoords?.first ?: 0.0) }
+    var userLon by remember { mutableDoubleStateOf(savedCoords?.second ?: 0.0) }
+    var prayerSchedule by remember { mutableStateOf<List<PrayerTimeItem>>(emptyList()) }
+    var prayerLoadError by remember { mutableStateOf(false) }
+    var adhanEnabled by remember { mutableStateOf(PrayerTimesEngine.isAdhanEnabled(context)) }
     var azimuth by remember { mutableFloatStateOf(0f) }
 
     fun refreshLastLocation() {
@@ -88,12 +94,21 @@ fun AdhanAndQiblaScreen(
         if (best != null) {
             userLat = best.latitude
             userLon = best.longitude
+            PrayerTimesEngine.saveLocation(context, best.latitude, best.longitude)
         }
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { _ -> refreshLastLocation() }
+
+    LaunchedEffect(Unit) {
+        val fineGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarseGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!fineGranted && !coarseGranted) {
+            permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.POST_NOTIFICATIONS))
+        }
+    }
 
     DisposableEffect(Unit) {
         refreshLastLocation()
@@ -111,23 +126,22 @@ fun AdhanAndQiblaScreen(
     val goldBorder = if (isDarkTheme) RoyalPalette.GoldHighlight else RoyalPalette.GoldRoyal
     val primaryInk = if (isDarkTheme) RoyalPalette.CreamText else RoyalPalette.InkEmerald
 
-    val prayerSchedule = remember {
-        listOf(
-            "الفجر" to "04:58 ص",
-            "الشروق" to "06:24 ص",
-            "الظهر" to "11:42 ص",
-            "العصر" to "02:36 م",
-            "المغرب" to "04:56 م",
-            "العشاء" to "06:18 م"
-        )
-    }
     val muezzins = remember {
-        listOf(
-            "أذان المسجد النبوي الشريف",
-            "أذان المسجد الحرام بمكة",
-            "أذان الشيخ مشاري راشد العفاسي",
-            "أذان الشيخ علي أحمد ملا"
-        )
+        listOf("حسن خلفان – مؤذن جامع الإمام محمد بن عبدالوهاب", "صالح النابت – مؤذن جامع الإمام محمد بن عبدالوهاب")
+    }
+
+    LaunchedEffect(userLat, userLon) {
+        if (userLat in -90.0..90.0 && userLon in -180.0..180.0 && (userLat != 0.0 || userLon != 0.0)) {
+            prayerLoadError = false
+            try {
+                val times = PrayerTimesEngine.fetchToday(userLat, userLon)
+                prayerSchedule = times
+                PrayerTimesEngine.saveLocation(context, userLat, userLon)
+                PrayerTimesEngine.scheduleToday(context, times)
+            } catch (_: Exception) {
+                prayerLoadError = true
+            }
+        }
     }
 
     if (qiblaIsolatedMode) {
@@ -224,7 +238,8 @@ fun AdhanAndQiblaScreen(
                     permissionLauncher.launch(
                         arrayOf(
                             Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION
+                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                            Manifest.permission.POST_NOTIFICATIONS
                         )
                     )
                 },
@@ -266,9 +281,15 @@ fun AdhanAndQiblaScreen(
                         fontFamily = titleFont
                     )
                     Text(
-                        text = "صوت المؤذن المعتمد: $selectedMuezzin",
+                        text = "المؤذن المختار: $selectedMuezzin",
                         color = RoyalPalette.GoldHighlight,
                         fontSize = 13.sp,
+                        fontFamily = indexFont
+                    )
+                    Text(
+                        text = "معاينة التسجيلات متاحة من مكتبة الأذان الخارجية. تنبيه الصلاة يعتمد حالياً صوت المنبّه في الجهاز.",
+                        color = RoyalPalette.CreamText.copy(alpha = 0.8f),
+                        fontSize = 11.sp,
                         fontFamily = indexFont
                     )
                     Row(
@@ -310,6 +331,10 @@ fun AdhanAndQiblaScreen(
                         .clickable {
                             selectedMuezzin = mName
                             showMuezzinList = false
+                            try {
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://audio.islamweb.net/audio/adhan/مختارات-من-الأذان"))
+                                context.startActivity(intent)
+                            } catch (_: Exception) { }
                         },
                     shape = RoundedCornerShape(14.dp),
                     color = if (isSel) cardBg else lightCardBg,
@@ -335,7 +360,51 @@ fun AdhanAndQiblaScreen(
             }
         }
 
-        items(prayerSchedule) { (prayerName, prayerTime) ->
+        item {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = lightCardBg,
+                border = BorderStroke(1.dp, goldBorder)
+            ) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = if (userLat != 0.0 || userLon != 0.0) "الموقع التلقائي: ${"%.4f".format(userLat)}, ${"%.4f".format(userLon)}" else "يرجى السماح بالوصول إلى الموقع لحساب المواقيت",
+                        color = primaryInk, fontSize = 12.sp, fontFamily = indexFont
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                        Text("تشغيل تنبيهات الصلاة", color = primaryInk, fontWeight = FontWeight.Bold, fontFamily = indexFont)
+                        Switch(checked = adhanEnabled, onCheckedChange = {
+                            adhanEnabled = it
+                            PrayerTimesEngine.setAdhanEnabled(context, it)
+                            if (it && prayerSchedule.isNotEmpty()) PrayerTimesEngine.scheduleToday(context, prayerSchedule)
+                        })
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.POST_NOTIFICATIONS))
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("تحديث موقعي ومواقيت الصلاة", fontFamily = indexFont) }
+                    OutlinedButton(
+                        onClick = {
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                                try {
+                                    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+                                } catch (_: Exception) { }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("السماح بالتنبيهات الدقيقة", fontFamily = indexFont) }
+                    if (prayerLoadError) Text("تعذر جلب المواقيت حالياً. تحقق من الإنترنت ثم أعد المحاولة.", color = Color.Red, fontSize = 12.sp)
+                    if (prayerSchedule.isEmpty() && !prayerLoadError) Text("جارٍ تحميل مواقيت الصلاة…", color = primaryInk, fontSize = 12.sp)
+                }
+            }
+        }
+
+        items(prayerSchedule) { prayer -> 
+            val prayerName = prayer.name
+            val prayerTime = prayer.time
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),

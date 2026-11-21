@@ -1,15 +1,22 @@
 package com.quran.app
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.pdf.PdfRenderer
-import android.os.ParcelFileDescriptor
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.text.ClickableText
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.withStyle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.awaitPointerEvent
+import androidx.compose.ui.input.pointer.calculatePan
+import androidx.compose.ui.input.pointer.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,9 +26,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
@@ -60,8 +69,6 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.FileOutputStream
 
 data class QuranIndexEntry(
     val title: String,
@@ -93,6 +100,9 @@ fun QuranIndexAndReaderScreen(
     var selectedTab by remember(startDirectlyInReader, initialTab) { mutableIntStateOf(initialTab.coerceIn(0, 2)) } // 0: السور، 1: الأجزاء، 2: المفضلة
     var currentPage by remember(initialPage) { mutableIntStateOf(initialPage.coerceIn(1, 604)) }
     var hideMargins by remember { mutableStateOf(false) }
+    var showTafsirLookup by remember { mutableStateOf(false) }
+    var tafsirSurah by remember { mutableIntStateOf(2) }
+    var tafsirAyah by remember { mutableIntStateOf(255) }
 
     val screenBg = if (isDarkTheme) RoyalPalette.EmeraldDeep else RoyalPalette.CreamBackground
     val cardBg = if (isDarkTheme) RoyalPalette.EmeraldCardDark else RoyalPalette.EmeraldRoyal
@@ -226,6 +236,15 @@ fun QuranIndexAndReaderScreen(
         }
     }
 
+    if (showTafsirLookup) {
+        TafsirLookupDialog(
+            isDarkTheme = isDarkTheme,
+            initialSurah = tafsirSurah,
+            initialAyah = tafsirAyah,
+            onDismiss = { showTafsirLookup = false }
+        )
+    }
+
     if (readerMode) {
         val pagerState = rememberPagerState(
             initialPage = (currentPage - 1).coerceIn(0, 603),
@@ -274,6 +293,10 @@ fun QuranIndexAndReaderScreen(
                             fontFamily = titleFont
                         )
 
+                        TextButton(onClick = { showTafsirLookup = true }, contentPadding = PaddingValues(horizontal = 5.dp, vertical = 4.dp)) {
+                            Text("تفسير آية", color = RoyalPalette.GoldHighlight, fontSize = 11.sp, fontFamily = indexFont)
+                        }
+
                         val isFav = favorites.contains(currentPage)
                         Surface(
                             shape = RoundedCornerShape(10.dp),
@@ -303,14 +326,6 @@ fun QuranIndexAndReaderScreen(
                 val pageNumber = pageIdx + 1
                 var zoom by remember(pageNumber) { mutableFloatStateOf(1f) }
                 var offset by remember(pageNumber) { mutableStateOf(Offset.Zero) }
-                var pageBitmap by remember(pageNumber) { mutableStateOf<Bitmap?>(null) }
-
-                LaunchedEffect(pageNumber) {
-                    pageBitmap = withContext(Dispatchers.IO) {
-                        renderMushafPageBitmap(context, pageNumber)
-                    }
-                }
-
                 Surface(
                     modifier = Modifier
                         .fillMaxSize()
@@ -324,63 +339,43 @@ fun QuranIndexAndReaderScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .pointerInput(pageNumber) {
-                                detectTransformGestures { _, pan, gestureZoom, _ ->
-                                    val newZoom = (zoom * gestureZoom).coerceIn(1f, 3.2f)
-                                    zoom = newZoom
-                                    offset = if (newZoom <= 1f) Offset.Zero else offset + pan
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false)
+                                    do {
+                                        val event = awaitPointerEvent()
+                                        if (event.changes.count { it.pressed } >= 2) {
+                                            val newZoom = (zoom * event.calculateZoom()).coerceIn(1f, 3.2f)
+                                            zoom = newZoom
+                                            offset = if (newZoom <= 1f) Offset.Zero else offset + event.calculatePan()
+                                            event.changes.forEach { it.consume() }
+                                        }
+                                    } while (event.changes.any { it.pressed })
                                 }
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        if (pageBitmap != null) {
-                            Image(
-                                bitmap = pageBitmap!!.asImageBitmap(),
-                                contentDescription = "صفحة $pageNumber",
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .graphicsLayer(
-                                        scaleX = zoom,
-                                        scaleY = zoom,
-                                        translationX = offset.x,
-                                        translationY = offset.y
-                                    )
-                            )
-                        } else {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(20.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Text(
-                                    text = "المصحف الشريف • صفحة $pageNumber",
-                                    color = if (isDarkTheme) RoyalPalette.GoldHighlight else RoyalPalette.EmeraldRoyal,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = titleFont
-                                )
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Text(
-                                    text = "ضع ملف mushaf.pdf داخل مجلد assets لعرض صفحات المصحف المصورة تلقائياً، ويمكنك السحب بين الصفحات أو التكبير بإصبعين.",
-                                    color = primaryInk,
-                                    fontSize = 14.sp,
-                                    fontFamily = indexFont,
-                                    textAlign = TextAlign.Center,
-                                    lineHeight = 22.sp
-                                )
-                                if (zoom > 1f) {
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    OutlinedButton(onClick = {
-                                        zoom = 1f
-                                        offset = Offset.Zero
-                                    }) {
-                                        Text("إعادة ضبط التكبير", fontFamily = indexFont)
-                                    }
+                        QuranOnlinePage(
+                            pageNumber = pageNumber,
+                            isDarkTheme = isDarkTheme,
+                            onVerseSelected = { key ->
+                                val parts = key.split(":")
+                                val surah = parts.getOrNull(0)?.toIntOrNull()
+                                val ayah = parts.getOrNull(1)?.toIntOrNull()
+                                if (surah != null && ayah != null) {
+                                    tafsirSurah = surah
+                                    tafsirAyah = ayah
+                                    showTafsirLookup = true
                                 }
-                            }
-                        }
+                            },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer(
+                                    scaleX = zoom,
+                                    scaleY = zoom,
+                                    translationX = offset.x,
+                                    translationY = offset.y
+                                )
+                        )
                     }
                 }
             }
@@ -598,27 +593,71 @@ fun QuranIndexAndReaderScreen(
     }
 }
 
-private fun renderMushafPageBitmap(context: Context, pageNumber: Int): Bitmap? {
-    return try {
-        val outFile = File(context.cacheDir, "mushaf_cached.pdf")
-        if (!outFile.exists() || outFile.length() == 0L) {
-            context.assets.open("mushaf.pdf").use { input ->
-                FileOutputStream(outFile).use { output -> input.copyTo(output) }
+@Composable
+private fun TafsirLookupDialog(
+    isDarkTheme: Boolean,
+    initialSurah: Int = 2,
+    initialAyah: Int = 255,
+    onDismiss: () -> Unit
+) {
+    var surahInput by remember(initialSurah) { mutableStateOf(initialSurah.toString()) }
+    var ayahInput by remember(initialAyah) { mutableStateOf(initialAyah.toString()) }
+    var tafsir by remember { mutableStateOf("") }
+    var verse by remember { mutableStateOf("") }
+    var loading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val bg = if (isDarkTheme) RoyalPalette.EmeraldCardDark else androidx.compose.ui.graphics.Color.White
+    val ink = if (isDarkTheme) RoyalPalette.CreamText else RoyalPalette.InkEmerald
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = bg,
+        title = { Text("التفسير الميسّر", color = ink, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(Modifier.heightIn(max = 470.dp).verticalScroll(androidx.compose.foundation.rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("أدخل رقم السورة ورقم الآية لعرض التفسير الميسّر.", color = ink, fontSize = 12.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.material3.OutlinedTextField(value = surahInput, onValueChange = { surahInput = it.filter(Char::isDigit) }, label = { Text("رقم السورة") }, modifier = Modifier.weight(1f), singleLine = true)
+                    androidx.compose.material3.OutlinedTextField(value = ayahInput, onValueChange = { ayahInput = it.filter(Char::isDigit) }, label = { Text("رقم الآية") }, modifier = Modifier.weight(1f), singleLine = true)
+                }
+                androidx.compose.material3.Button(
+                    onClick = {
+                        val surah = surahInput.toIntOrNull()
+                        val ayah = ayahInput.toIntOrNull()
+                        if (surah == null || surah !in 1..114 || ayah == null || ayah < 1) {
+                            error = "أدخل رقم سورة من 1 إلى 114 ورقم آية صحيحاً."; return@Button
+                        }
+                        loading = true; error = ""; tafsir = ""; verse = ""
+                        scope.launch {
+                            try {
+                                val pair = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    val url = java.net.URL("https://quranenc.com/api/v1/translation/aya/arabic_moyassar/$surah/$ayah")
+                                    val connection = url.openConnection() as java.net.HttpURLConnection
+                                    try {
+                                        connection.connectTimeout = 12000; connection.readTimeout = 15000
+                                        val root = org.json.JSONObject(connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
+                                        val result = root.optJSONObject("result") ?: throw IllegalStateException("لا توجد نتيجة لهذه الآية")
+                                        Pair(result.optString("arabic_text"), result.optString("translation"))
+                                    } finally { connection.disconnect() }
+                                }
+                                verse = pair.first; tafsir = pair.second
+                                if (tafsir.isBlank()) error = "لم يتوفر تفسير لهذه الآية حالياً."
+                            } catch (_: Exception) { error = "تعذر جلب التفسير. تحقق من الإنترنت أو من رقم الآية." }
+                            finally { loading = false }
+                        }
+                    },
+                    enabled = !loading,
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = RoyalPalette.EmeraldRoyal, contentColor = RoyalPalette.CreamText)
+                ) { Text(if (loading) "جارٍ التحميل…" else "عرض التفسير") }
+                if (error.isNotBlank()) Text(error, color = androidx.compose.ui.graphics.Color(0xFFB3261E), fontSize = 12.sp)
+                if (verse.isNotBlank()) Text(verse, color = ink, fontSize = 18.sp, lineHeight = 30.sp, fontWeight = FontWeight.Bold)
+                if (tafsir.isNotBlank()) {
+                    Text(tafsir, color = ink, fontSize = 15.sp, lineHeight = 25.sp)
+                    Text("التفسير الميسّر", color = RoyalPalette.GoldMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
-        }
-        val pfd = ParcelFileDescriptor.open(outFile, ParcelFileDescriptor.MODE_READ_ONLY) ?: return null
-        val renderer = PdfRenderer(pfd)
-        val idx = (pageNumber - 1).coerceIn(0, renderer.pageCount - 1)
-        val page = renderer.openPage(idx)
-        val scale = 2
-        val bmp = Bitmap.createBitmap(page.width * scale, page.height * scale, Bitmap.Config.ARGB_8888)
-        bmp.eraseColor(android.graphics.Color.parseColor("#FFFDF7"))
-        page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-        page.close()
-        renderer.close()
-        pfd.close()
-        bmp
-    } catch (_: Exception) {
-        null
-    }
+        },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text("إغلاق", color = RoyalPalette.GoldMuted) } }
+    )
 }

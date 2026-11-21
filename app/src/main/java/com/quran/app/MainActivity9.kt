@@ -133,8 +133,17 @@ object VoiceAdhkarScheduler {
         "الحمد لله",
         "لا إله إلا الله",
         "الله أكبر",
-        "أستغفر الله العظيم",
-        "سبحان الله وبحمده سبحان الله العظيم"
+        "أستغفر الله العظيم وأتوب إليه",
+        "سبحان الله وبحمده سبحان الله العظيم",
+        "لا حول ولا قوة إلا بالله",
+        "اللهم صل وسلم على نبينا محمد",
+        "رضيت بالله رباً وبالإسلام ديناً وبمحمد صلى الله عليه وسلم نبياً",
+        "أعوذ بكلمات الله التامات من شر ما خلق",
+        "حسبي الله لا إله إلا هو عليه توكلت وهو رب العرش العظيم",
+        "اللهم بك أصبحنا وبك أمسينا وبك نحيا وبك نموت وإليك النشور",
+        "أصبحنا وأصبح الملك لله والحمد لله",
+        "يا حي يا قيوم برحمتك أستغيث أصلح لي شأني كله",
+        "سبحان الله العظيم وبحمده"
     )
 
     fun ensureChannel(context: Context) {
@@ -197,9 +206,13 @@ class VoiceAdhkarReceiver : BroadcastReceiver() {
         val prefs = context.getSharedPreferences(VoiceAdhkarScheduler.PREFS_NAME, Context.MODE_PRIVATE)
         if (!prefs.getBoolean(VoiceAdhkarScheduler.KEY_ENABLED, false)) return
 
-        val phrase = intent?.getStringExtra("phrase")
-            ?: prefs.getString(VoiceAdhkarScheduler.KEY_PHRASE, "سبحان الله")
-            ?: "سبحان الله"
+        val dhikrIndex = prefs.getInt("voice_adhkar_cycle_index", 0)
+        val phrase = VoiceAdhkarScheduler.availablePhrases[
+            dhikrIndex.mod(VoiceAdhkarScheduler.availablePhrases.size)
+        ]
+        prefs.edit()
+            .putInt("voice_adhkar_cycle_index", (dhikrIndex + 1) % VoiceAdhkarScheduler.availablePhrases.size)
+            .apply()
         val showOnLockScreen = intent?.getBooleanExtra("lockScreen", true)
             ?: prefs.getBoolean(VoiceAdhkarScheduler.KEY_LOCK_SCREEN, true)
 
